@@ -1,0 +1,13 @@
+id = "notes"
+priority = 12
+
+[[intent]]
+id = "add"
+acts = ["note_add"]
+
+[[intent]]
+id = "read"
+acts = ["note_read"]
+
+[[intent]]
+id = "add.text"

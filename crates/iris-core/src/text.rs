@@ -9,6 +9,8 @@ pub struct Token {
     pub norm: String,
     /// As the user wrote or said it, for titles ("Dr. Müller").
     pub orig: String,
+    /// A comma or semicolon followed the word: where a spoken list breaks.
+    pub sep: bool,
 }
 
 /// One utterance, tokenised. `norm` is the normalised tokens joined by single spaces.
@@ -34,7 +36,7 @@ impl Utterance {
             if lang.dialog.fillers.contains(&norm) {
                 continue;
             }
-            tokens.push(Token { norm, orig: orig.to_string() });
+            tokens.push(Token { norm, orig: orig.to_string(), sep: piece.ends_with([',', ';']) });
         }
         Self::from_tokens(raw, tokens)
     }

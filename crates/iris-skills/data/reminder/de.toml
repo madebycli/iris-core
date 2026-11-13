@@ -20,6 +20,8 @@ re = '(?i)\b(raus|rein|ein|auf|ab|an|aus|mit|vor|weg|zurück|hin|her|um|nach|dur
 to = '${1}${2}'
 
 [words]
+# openings that only mean a reminder when a time is named
+weak = ["vergiss nicht"]
 # removed wherever they stand
 drop = ["erinnert werden", "erinnert", "vergiss nicht", "erinnere mich", "erinner mich", "erinnere", "erinner", "erinnern", "erinnerung", "erinnerungen", "sag mir bescheid", "sagst du mir bescheid", "bescheid sagen", "bescheid", "aufgabe"]
 # removed from the front of the title, again and again

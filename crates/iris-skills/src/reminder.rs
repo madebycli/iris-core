@@ -27,7 +27,14 @@ impl Skill for Reminder {
 
     fn handle(&self, intent: &str, cx: &mut Cx) -> Option<Reply> {
         match intent {
-            "create" => Some(create(cx, Draft::default())),
+            "create" => {
+                // "do not forget …" is only a reminder when it names a time; "… put milk on the list" is not
+                let weak = cx.list("weak").iter().any(|w| cx.utt.norm.starts_with(w.as_str()));
+                if weak && scan(&cx.utt.norms(), cx.lang).expr.is_empty() {
+                    return None;
+                }
+                Some(create(cx, Draft::default()))
+            }
             "create.time" | "create.title" => {
                 let draft: Draft = serde_json::from_value(cx.state.clone()).unwrap_or_default();
                 Some(create(cx, draft))

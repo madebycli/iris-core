@@ -59,6 +59,9 @@ pub struct SkillLanguage {
     /// Regular expressions the skill's code asks for by name. Checked when the skill is registered.
     #[serde(default)]
     pub expressions: HashMap<String, String>,
+    /// Named word-to-word tables ("einkaufs" is the list "Einkauf").
+    #[serde(default)]
+    pub tables: HashMap<String, HashMap<String, String>>,
     /// Replacements applied to text the skill takes from the user (a title), in order.
     #[serde(default, rename = "rewrite")]
     pub rewrites: Vec<RewriteSource>,
@@ -125,6 +128,9 @@ pub struct Cx<'a> {
     pub words: &'a HashMap<String, Vec<String>>,
     pub expressions: &'a HashMap<String, Regex>,
     pub rewrites: &'a [(Regex, String)],
+    pub tables: &'a HashMap<String, HashMap<String, String>>,
+    pub(crate) memory: &'a mut HashMap<String, (String, i64)>,
+    pub(crate) skill_id: &'a str,
     pub host: &'a dyn Host,
     pub store: &'a dyn Store,
     pub now: Zoned,
@@ -151,6 +157,23 @@ impl Cx<'_> {
 
     pub fn expr(&self, name: &str) -> Option<&Regex> {
         self.expressions.get(name)
+    }
+
+    /// A value from one of the language file's tables.
+    pub fn table(&self, table: &str, key: &str) -> Option<&str> {
+        self.tables.get(table)?.get(key).map(String::as_str)
+    }
+
+    /// Keeps a small fact for later turns ("the list talked about last"). Each skill has its own.
+    pub fn remember(&mut self, key: &str, value: &str) {
+        let now = self.now_ms();
+        self.memory.insert(format!("{}.{key}", self.skill_id), (value.to_string(), now));
+    }
+
+    /// A remembered fact, if it is no older than `max_age_ms`.
+    pub fn recall(&self, key: &str, max_age_ms: i64) -> Option<String> {
+        let (value, at) = self.memory.get(&format!("{}.{key}", self.skill_id))?;
+        (self.now_ms() - at <= max_age_ms).then(|| value.clone())
     }
 
     /// `text` after the language's rewrites ("rauszubringen" becomes "rausbringen").

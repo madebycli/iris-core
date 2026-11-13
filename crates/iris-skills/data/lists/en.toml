@@ -1,0 +1,89 @@
+[[pattern]]
+intent = "clear"
+re = '\b(?:delete|clear|remove|empty)\b.*\b(?:everything|all)\b|\b(?:clear|empty)\b.*\blist\b'
+
+[[pattern]]
+intent = "check_all"
+re = '\b(?:check|tick|cross)\b.*\b(?:everything|all)\b.*\boff\b'
+
+[[pattern]]
+intent = "check"
+re = '\b(?:check|tick|cross)\b.*\boff\b|\bis done$|\bare done$'
+
+[[pattern]]
+intent = "remove"
+re = '\b(?:delete|remove|take)\b'
+
+[[pattern]]
+intent = "read"
+re = '\bwhat (?:is|do i have|have i got)\b.*\blist\b|\b(?:show|read|tell)\b.*\blist\b|^(?:my |the )?\p{L}+ list$'
+
+[[pattern]]
+intent = "guided"
+re = '\b(?:new|create|add)\b.*\b(?:entry|item)\b'
+
+[[pattern]]
+intent = "add"
+re = '\blist\b|^i need to buy (?P<rest>.+)$'
+
+[[pattern]]
+intent = "more"
+re = '^(?:yes )?(?:and also|and|also|plus) (?P<rest>.+)$'
+
+[expressions]
+list_name = '\b(?P<a>\p{L}+) list\b'
+list_phrase = '\b(?:(?:to|on|onto|from|off|in) )?(?:(?:my|the|our) )?\p{L}+ list\b'
+
+[tables.list_alias]
+shopping = "Shopping"
+grocery = "Shopping"
+groceries = "Shopping"
+
+[tables.defaults]
+list = "Shopping"
+
+[words]
+sentence_start = ["what", "which", "when", "who", "where", "how", "show", "read", "can", "could", "set", "remind", "delete", "remove", "check"]
+list_stop = ["my", "the", "a", "our", "this", "that", "new"]
+drop = ["can you", "could you", "do not forget", "i need", "please"]
+lead = ["add", "put", "write", "note", "me", "yes", "and", "then", "also", "ok", "okay", "so"]
+trail = ["to", "on", "too"]
+separators = ["and", "plus"]
+placeholder = ["something", "an item", "an entry", "item", "entry", "a new entry", "a new item", "a thing"]
+entry_words = ["entry", "entries", "item", "items", "list"]
+all = ["all", "everything", "every"]
+today = ["today", "from today", "today's"]
+verbs = ["delete", "remove", "take", "check", "tick", "cross", "off", "is done", "are done", "from", "the", "my"]
+
+[messages]
+"added.one" = "{items} is on the {list} list."
+"added.other" = "{items} are on the {list} list."
+already = "{items} is already on the {list} list."
+ask_list = "Which list?"
+ask_items = "What should go on the {list} list?"
+ask_more = "Anything else?"
+finished = "Okay."
+"read.one" = "On the {list} list: {items}."
+"read.other" = "On the {list} list: {items}."
+empty = "The {list} list is empty."
+no_lists = "You have no list yet."
+"checked.one" = "{items} is ticked off."
+"checked.other" = "{items} are ticked off."
+"removed.one" = "{items} is off the list."
+"removed.other" = "{items} are off the list."
+not_found = "I did not find that on any list."
+"confirm_clear.one" = "Really delete the entry on the {list} list?"
+"confirm_clear.other" = "Really delete all {n} entries on the {list} list?"
+"confirm_clear_today.one" = "Really delete today's entry?"
+"confirm_clear_today.other" = "Really delete all {n} entries from today?"
+cleared = "The {list} list is empty."
+cleared_today = "Today's entries are deleted."
+kept = "Okay, everything stays."
+all_checked = "Everything on the {list} list is ticked off."
+all_checked_today = "All of today's entries are ticked off."
+
+[training]
+add = ["add {item} to my {list} list", "put {item} on the {list} list"]
+read = ["what is on my {list} list", "show me the {list} list"]
+remove = ["remove {item} from the {list} list"]
+check = ["check off {item}", "{item} is done"]

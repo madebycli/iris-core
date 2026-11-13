@@ -7,6 +7,7 @@
 //! @now 2026-11-10T16:00 Europe/Berlin
 //! @lang de
 //! @setting reminder.destination tasks
+//! @item "Milch" Einkauf          an entry that is already on a list
 //! @tasklist Arbeit               the task app has this list
 //! @tasks down                    the task app cannot be reached
 //! @advance 90s                   time passes (s, m, h)
@@ -17,6 +18,7 @@
 //! = timer "Title" 600s
 //! = task "Title" 2026-11-11T08:00 list=Arbeit
 //! = event "Title" 2026-11-11T08:00
+//! = item "Milch" list=Einkauf done      (or: open)
 //! = count reminder 1
 //! = kind question                done, question, failed or unhandled
 //! ```
@@ -166,6 +168,16 @@ pub fn run_spec(source: &str) -> (usize, Vec<Failure>) {
                     host.lists.push(ExternalList { id, name: value.to_string() });
                 }
                 "tasks" => host.tasks_down = value == "down",
+                "item" => match quoted(value) {
+                    Some((title, list)) => {
+                        use iris_core::Store;
+                        let n = session.store.all(None).len();
+                        let mut entry = Entry::new(format!("seed-{n}"), EntryKind::ListItem, title, host.now_ms, &host.zone);
+                        entry.collection = list.to_string();
+                        session.store.put(entry);
+                    }
+                    None => fail(format!("bad @item {value:?}")),
+                },
                 "advance" => {
                     let (number, unit) = value.split_at(value.len().saturating_sub(1));
                     let scale = match unit {
@@ -239,6 +251,8 @@ fn verify(check: &str, session: &Session, last: Option<&Reply>) -> Result<(), St
             let (kind, n) = rest.split_once(' ').ok_or("count needs a kind and a number")?;
             let kind = kind_of(kind).ok_or(format!("unknown kind {kind:?}"))?;
             let have = session.store.all(Some(kind)).iter().filter(|e| e.pending).count();
+            let have = if let Some((_, list)) = n.split_once(" list=") { session.store.all(Some(kind)).iter().filter(|e| e.pending && e.collection == list).count() } else { have };
+            let n = n.split(' ').next().unwrap_or(n);
             (have.to_string() == n).then_some(()).ok_or(format!("expected {n} {kind:?}, found {have}: {}", everything()))
         }
         "reminder" | "timer" | "note" | "item" => {
@@ -249,7 +263,11 @@ fn verify(check: &str, session: &Session, last: Option<&Reply>) -> Result<(), St
                 return Err(format!("no {word} titled {title:?}; stored: {}", everything()));
             }
             for part in rest.split_whitespace() {
-                let ok = if let Some(code) = part.strip_prefix("repeat=") {
+                let ok = if let Some(list) = part.strip_prefix("list=") {
+                    found.iter().any(|e| e.collection == list)
+                } else if part == "done" || part == "open" {
+                    found.iter().any(|e| e.pending == (part == "open"))
+                } else if let Some(code) = part.strip_prefix("repeat=") {
                     found.iter().any(|e| e.repeat == code)
                 } else if let Some(secs) = part.strip_suffix('s').and_then(|s| s.parse::<i64>().ok()) {
                     found.iter().any(|e| e.duration_ms == secs * 1000)

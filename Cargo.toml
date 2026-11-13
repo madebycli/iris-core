@@ -15,3 +15,7 @@ regex = "1"
 jiff = { version = "0.2", features = ["serde"] }
 iris-core = { path = "crates/iris-core" }
 iris-skills = { path = "crates/iris-skills" }
+
+# dependencies are built optimised in debug builds too: the specs compile many patterns
+[profile.dev.package."*"]
+opt-level = 2

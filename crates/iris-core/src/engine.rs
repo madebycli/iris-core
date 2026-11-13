@@ -47,6 +47,7 @@ struct Loaded {
     words: HashMap<String, Vec<String>>,
     expressions: HashMap<String, Regex>,
     rewrites: Vec<(Regex, String)>,
+    tables: HashMap<String, HashMap<String, String>>,
 }
 
 struct Registered {
@@ -69,6 +70,7 @@ pub struct Engine {
     store: Arc<dyn Store>,
     classifier: Box<dyn Classifier>,
     pending: Option<Pending>,
+    memory: HashMap<String, (String, i64)>,
     ids: u64,
     /// Below this the classifier's answer is not acted on.
     pub cutoff: f32,
@@ -79,7 +81,7 @@ pub struct Engine {
 impl Engine {
     pub fn new(host: Arc<dyn Host>, store: Arc<dyn Store>) -> Self {
         let langs = LangPack::builtin().into_iter().map(|p| (p.code.clone(), Arc::new(p))).collect();
-        Self { langs, skills: Vec::new(), host, store, classifier: Box::new(NoClassifier), pending: None, ids: 0, cutoff: 0.60, question_ttl_ms: 120_000 }
+        Self { langs, skills: Vec::new(), host, store, classifier: Box::new(NoClassifier), pending: None, memory: HashMap::new(), ids: 0, cutoff: 0.60, question_ttl_ms: 120_000 }
     }
 
     pub fn add_language(&mut self, pack: LangPack) {
@@ -123,7 +125,7 @@ impl Engine {
                 let re = Regex::new(&r.re).map_err(|e| SkillError::Pattern { skill: manifest.id.clone(), code: code.clone(), re: r.re.clone(), error: e.to_string() })?;
                 rewrites.push((re, r.to));
             }
-            langs.insert(code.clone(), Loaded { patterns, messages: parsed.messages, words: parsed.words, expressions, rewrites });
+            langs.insert(code.clone(), Loaded { patterns, messages: parsed.messages, words: parsed.words, expressions, rewrites, tables: parsed.tables });
         }
         self.skills.push(Registered { skill, manifest, langs });
         self.skills.sort_by_key(|r| -r.manifest.priority);
@@ -197,7 +199,7 @@ impl Engine {
         let now_ms = self.host.now_ms();
         let tz = TimeZone::get(&self.host.zone()).unwrap_or(TimeZone::UTC);
         let now = Timestamp::from_millisecond(now_ms).unwrap_or(Timestamp::UNIX_EPOCH).to_zoned(tz);
-        let mut cx = Cx { utt, slots, lang, messages: &loaded.messages, words: &loaded.words, expressions: &loaded.expressions, rewrites: &loaded.rewrites, host: self.host.as_ref(), store: self.store.as_ref(), now, state, ask: None, ids: &mut self.ids };
+        let mut cx = Cx { utt, slots, lang, messages: &loaded.messages, words: &loaded.words, expressions: &loaded.expressions, rewrites: &loaded.rewrites, tables: &loaded.tables, memory: &mut self.memory, skill_id: &reg.manifest.id, host: self.host.as_ref(), store: self.store.as_ref(), now, state, ask: None, ids: &mut self.ids };
         let mut reply = reg.skill.handle(intent, &mut cx)?;
         reply.skill = reg.manifest.id.clone();
         reply.intent = intent.to_string();

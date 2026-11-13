@@ -1,0 +1,43 @@
+id = "lists"
+priority = 15
+
+[[intent]]
+id = "add"
+acts = ["list_add"]
+
+[[intent]]
+id = "read"
+acts = ["list_read"]
+
+[[intent]]
+id = "remove"
+acts = ["list_remove"]
+
+[[intent]]
+id = "check"
+acts = ["list_check"]
+
+[[intent]]
+id = "check_all"
+
+[[intent]]
+id = "clear"
+
+[[intent]]
+id = "guided"
+
+[[intent]]
+id = "more"
+
+# answers to the skill's own questions
+[[intent]]
+id = "add.list"
+
+[[intent]]
+id = "add.items"
+
+[[intent]]
+id = "add.more"
+
+[[intent]]
+id = "clear.confirm"

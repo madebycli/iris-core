@@ -1,0 +1,25 @@
+[[pattern]]
+intent = "read"
+re = '\b(?:show|read|see|what are|which)\b.*\bnotes?\b'
+
+[[pattern]]
+intent = "add"
+re = '\bnotes?\b|^write (?:this|that) down\b'
+
+[words]
+drop = ["write this down", "write that down", "can you", "could you"]
+lead = ["take a note", "make a note", "add a note", "create a note", "new note", "note down", "note that", "note", "a note", "that", "of", "to", "my notes", "add to my notes", "and"]
+trail = ["as a note", "to my notes"]
+placeholder = ["something"]
+
+[messages]
+added = "Noted: “{text}”."
+ask_text = "What should I note?"
+none = "You have no notes."
+"read.one" = "Your note: {items}."
+"read.other" = "Your {n} notes: {items}."
+card_title = "Notes"
+
+[training]
+add = ["note {text}", "make a note {text}"]
+read = ["show my notes", "read me my notes"]

@@ -1,0 +1,25 @@
+[[pattern]]
+intent = "read"
+re = '\b(?:zeig\w*|lies|lese|sehen|welche|was habe ich|was hab ich)\b.*\bnotiz(?:en)?\b|\bnotiz(?:en)?\b.*\b(?:sehen|vor|anzeigen)$|\bwas ich notiert habe\b'
+
+[[pattern]]
+intent = "add"
+re = '\bnotier\w*\b|\bnotiz(?:en)?\b|^schreib\w* das auf\b'
+
+[words]
+drop = ["schreib das auf", "schreibe das auf", "kannst du", "könntest du"]
+lead = ["notiere dir", "notier dir", "notiere", "notier", "notieren", "füge zu meinen notizen hinzu", "schreib in meine notizen", "schreibe in meine notizen", "leg eine notiz an", "lege eine notiz an", "mach eine notiz", "mache eine notiz", "erstelle eine notiz", "ich möchte eine notiz machen", "ich will etwas notieren", "ich möchte etwas notieren", "neue notiz", "eine notiz", "notiz", "dass", "mir", "dir", "hey", "und", "ja"]
+trail = ["notieren", "als notiz", "in meine notizen"]
+placeholder = ["etwas", "was", "irgendwas"]
+
+[messages]
+added = "Notiert: „{text}“."
+ask_text = "Was soll ich notieren?"
+none = "Du hast keine Notizen."
+"read.one" = "Deine Notiz: {items}."
+"read.other" = "Deine {n} Notizen: {items}."
+card_title = "Notizen"
+
+[training]
+add = ["notiere {text}", "mach eine notiz {text}", "schreib in meine notizen {text}"]
+read = ["zeig meine notizen", "lies mir meine notizen vor"]
