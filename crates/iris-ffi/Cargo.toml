@@ -1,0 +1,25 @@
+[package]
+name = "iris-ffi"
+description = "The boundary between the Iris core and a frontend, generated with UniFFI."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "iris_ffi"
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bindgen.rs"
+required-features = ["cli"]
+
+[features]
+cli = ["uniffi/cli"]
+
+[dependencies]
+iris-core.workspace = true
+iris-skills.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uniffi = "0.29"
