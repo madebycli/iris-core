@@ -1,0 +1,53 @@
+[[pattern]]
+intent = "delete"
+re = '\b(?:delete|remove|cancel|clear)\b.*\breminders?\b'
+
+[[pattern]]
+intent = "list"
+re = '\b(?:what|which|show|list|any|do i have|how many|my)\b.*\breminders?\b|\bnext reminder\b'
+
+[[pattern]]
+intent = "create"
+re = '\bremind\w*\b|\b(?:set|create|add|make|schedule)\b.*\breminder\b|\blet me know\b'
+
+[expressions]
+list_hint = '\b(?:to|on|in) (?:my |the )?(?P<a>\p{L}+) list\b'
+
+[words]
+drop = ["remind me", "reminder", "remind", "let me know"]
+lead = ["can you", "could you", "would you", "please", "i need to", "i have to", "i want to", "i would like", "set", "create", "add", "make", "schedule", "me", "a", "an", "the", "new", "for", "to", "about", "that i need to", "that i have to", "that i", "that", "of", "and"]
+trail = ["and", "to"]
+all = ["all", "every", "everything"]
+next = ["next"]
+
+[messages]
+ask_time = "At what time, or when should I remind you?"
+ask_time_for = "When should I remind you about “{title}”?"
+ask_title = "What should the reminder be called?"
+time_unclear = "I cannot schedule that time unambiguously. When should I remind you?"
+time_past = "That time has already passed. When should I remind you?"
+created = "I will remind you {when} about “{title}”."
+created_repeat = "I will remind you {repeat} about “{title}”, first {when}."
+created_tasks = "“{title}” is on your {list} task list, due {when}."
+created_calendar = "“{title}” is in your {calendar} calendar {when}."
+created_both = "“{title}” is on your {list} task list and in your {calendar} calendar {when}."
+fallback_local = "Your task app could not be reached. I will remind you myself {when} about “{title}”."
+none = "You have no open reminders."
+"list.one" = "You have one reminder: {items}."
+"list.other" = "You have {n} reminders: {items}."
+item = "{title} {when}"
+next = "Next up: {title} {when}."
+card_title = "Reminders"
+deleted = "Reminder “{title}” deleted."
+which_delete = "Which reminder should I delete?"
+"confirm_all.one" = "Really delete your reminder?"
+"confirm_all.other" = "Really delete all {n} reminders?"
+"deleted_all.one" = "Reminder deleted."
+"deleted_all.other" = "{n} reminders deleted."
+kept = "Okay, they stay."
+not_found = "I did not find that reminder."
+
+[training]
+create = ["remind me to {title} {when}", "remind me {when} to {title}", "set a reminder for {when} to {title}"]
+list = ["what reminders do i have", "what is my next reminder"]
+delete = ["delete the reminder {title}", "delete all reminders"]

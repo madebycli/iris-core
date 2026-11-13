@@ -1,0 +1,154 @@
+# German language pack of the Iris core. Everything the engine knows about German lives here.
+code = "de"
+
+[numbers]
+joiner = "und"            # einundzwanzig = ein + und + zwanzig
+[numbers.words]
+null = 0
+ein = 1
+eins = 1
+eine = 1
+einen = 1
+einer = 1
+einem = 1
+zwei = 2
+zwo = 2
+drei = 3
+vier = 4
+"fünf" = 5
+sechs = 6
+sieben = 7
+acht = 8
+neun = 9
+zehn = 10
+elf = 11
+"zwölf" = 12
+dreizehn = 13
+vierzehn = 14
+"fünfzehn" = 15
+sechzehn = 16
+siebzehn = 17
+achtzehn = 18
+neunzehn = 19
+hundert = 100
+[numbers.tens]
+zwanzig = 20
+"dreißig" = 30
+dreissig = 30
+vierzig = 40
+"fünfzig" = 50
+sechzig = 60
+siebzig = 70
+achtzig = 80
+neunzig = 90
+
+[time]
+in_words = ["in"]
+and_words = ["und"]
+clock_markers = ["um", "gegen", "ab"]
+oclock = ["uhr"]
+half = ["halb"]
+half_means = "before"     # halb fünf = 4:30
+quarter_past = ["viertel nach"]
+quarter_to = ["viertel vor"]
+past = ["nach"]
+to = ["vor"]
+am = []
+pm = []
+date_fillers = ["am", "den", "dem", "vom"]
+date_joiners = []
+next_words = ["nächsten", "nächste", "nächster", "kommenden", "kommende"]
+every_words = ["jeden", "jede", "jedes"]
+[time.units]
+second = ["sekunde", "sekunden", "sek"]
+minute = ["minute", "minuten", "min"]
+hour = ["stunde", "stunden", "std"]
+day = ["tag", "tage", "tagen"]
+week = ["woche", "wochen"]
+[time.fractions]
+"halbe stunde" = 1800
+"halben stunde" = 1800
+"viertelstunde" = 900
+"viertel stunde" = 900
+"dreiviertelstunde" = 2700
+"dreiviertel stunde" = 2700
+"anderthalb stunden" = 5400
+"eineinhalb stunden" = 5400
+"zweieinhalb stunden" = 9000
+[time.day_offsets]
+heute = 0
+morgen = 1
+"übermorgen" = 2
+[time.period_after_day]
+morgen = "morning"        # "heute morgen" is this morning, not tomorrow
+[time.weekdays]
+montag = 1
+dienstag = 2
+mittwoch = 3
+donnerstag = 4
+freitag = 5
+samstag = 6
+sonnabend = 6
+sonntag = 7
+[time.months]
+januar = 1
+februar = 2
+"märz" = 3
+april = 4
+mai = 5
+juni = 6
+juli = 7
+august = 8
+september = 9
+oktober = 10
+november = 11
+dezember = 12
+[time.named]
+mittag = "12:00"
+mittags = "12:00"
+mitternacht = "00:00"
+[time.periods]
+morning = ["morgens", "früh", "vormittags", "am morgen", "am vormittag"]
+afternoon = ["nachmittags", "am nachmittag", "nachmittag"]
+evening = ["abends", "am abend", "abend"]
+night = ["nachts", "in der nacht", "nacht"]
+[time.repeat]
+daily = ["täglich", "jeden tag"]
+weekdays = ["werktags", "an werktagen", "unter der woche"]
+weekly = ["wöchentlich", "jede woche"]
+
+[dialog]
+fillers = ["bitte", "mal", "ähm", "äh", "hm", "doch", "eben", "halt", "iris"]
+cancel = ["abbrechen", "abbruch", "stopp", "stop", "vergiss es", "lass gut sein", "nein danke", "doch nicht", "brich ab", "egal", "schon gut", "lass es"]
+yes = ["ja", "jo", "jep", "klar", "genau", "mach das", "ja bitte", "okay", "ok", "richtig", "stimmt"]
+no = ["nein", "nö", "ne", "nicht", "lieber nicht", "falsch"]
+done = ["nein", "nö", "das war's", "das wars", "das war alles", "reicht", "das reicht", "fertig", "nichts mehr", "nichts", "danke", "nein danke", "passt"]
+
+[format]
+clock = "{h}:{mm} Uhr"
+date = "{d}.{m}."
+weekday_names = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+list_and = "und"
+
+[messages]
+cancelled = "Okay, abgebrochen."
+not_understood = "Das habe ich nicht verstanden."
+"when.today" = "heute um {time}"
+"when.tomorrow" = "morgen um {time}"
+"when.weekday" = "am {weekday} um {time}"
+"when.date" = "am {date} um {time}"
+"day.today" = "heute"
+"day.tomorrow" = "morgen"
+"day.weekday" = "am {weekday}"
+"day.date" = "am {date}"
+"unit.second.one" = "{n} Sekunde"
+"unit.second.other" = "{n} Sekunden"
+"unit.minute.one" = "{n} Minute"
+"unit.minute.other" = "{n} Minuten"
+"unit.hour.one" = "{n} Stunde"
+"unit.hour.other" = "{n} Stunden"
+"unit.day.one" = "{n} Tag"
+"unit.day.other" = "{n} Tagen"
+"repeat.daily" = "täglich"
+"repeat.weekdays" = "werktags"
+"repeat.weekly" = "wöchentlich"

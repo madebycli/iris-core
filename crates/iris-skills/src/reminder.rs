@@ -1,0 +1,203 @@
+//! Reminders: create (in one sentence or guided, time first), list, delete.
+//!
+//! Where a reminder is kept is the user's choice (`reminder.destination`): in Iris itself, in
+//! the task app, in the calendar, or in both of those. Iris' own reminders ring through the
+//! host's scheduler; the others ring in the app they were given to. If that app cannot be
+//! reached the reminder is kept in Iris and the reply says so — a reminder is never dropped.
+
+use crate::{join, strip};
+use iris_core::time::{describe, resolve, scan, HalfDay, Resolved, TimeError, TimeExpr};
+use iris_core::{Card, Cx, Entry, EntryKind, ExternalEvent, ExternalTask, Reply, Skill};
+use serde_json::json;
+
+pub struct Reminder;
+
+impl Skill for Reminder {
+    fn manifest(&self) -> &'static str {
+        include_str!("../data/reminder/skill.toml")
+    }
+
+    fn language(&self, code: &str) -> Option<&'static str> {
+        match code {
+            "de" => Some(include_str!("../data/reminder/de.toml")),
+            "en" => Some(include_str!("../data/reminder/en.toml")),
+            _ => None,
+        }
+    }
+
+    fn handle(&self, intent: &str, cx: &mut Cx) -> Option<Reply> {
+        match intent {
+            "create" => Some(create(cx, Draft::default())),
+            "create.time" | "create.title" => {
+                let draft: Draft = serde_json::from_value(cx.state.clone()).unwrap_or_default();
+                Some(create(cx, draft))
+            }
+            "list" => Some(list(cx)),
+            "delete" => Some(delete(cx, false)),
+            "delete.which" => Some(delete(cx, true)),
+            "delete.confirm" => Some(delete_all(cx)),
+            _ => None,
+        }
+    }
+}
+
+/// A reminder being put together over several turns.
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+struct Draft {
+    title: String,
+    time: TimeExpr,
+    list_hint: Option<String>,
+    /// Which answer is awaited: "time" or "title". Empty on the first turn.
+    awaiting: String,
+}
+
+fn create(cx: &mut Cx, mut draft: Draft) -> Reply {
+    let norms = cx.utt.norms();
+    let found = scan(&norms, cx.lang);
+    let mut free: Vec<bool> = found.used.iter().map(|u| !u).collect();
+    if let Some(m) = cx.expr("list_hint").and_then(|re| re.captures(&cx.utt.norm)) {
+        draft.list_hint = m.name("a").or_else(|| m.name("b")).map(|x| x.as_str().to_string());
+        for i in cx.utt.token_range(m.get(0).map(|x| x.range()).unwrap_or(0..0)) {
+            free[i] = false;
+        }
+    }
+    draft.time.merge(found.expr);
+    if draft.awaiting != "time" || draft.title.is_empty() {
+        let tokens: Vec<usize> = cx.span("rest").filter(|i| free[*i]).collect();
+        let said = cx.rewrite(&join(cx.utt, &strip(cx.utt, tokens, cx.list("drop"), cx.list("lead"), cx.list("trail"))));
+        if !said.is_empty() {
+            draft.title = said;
+        }
+    }
+    // time first, then the name
+    let resolved = match resolve(&draft.time, &cx.now, HalfDay::Nearest) {
+        Ok(r) => r,
+        Err(error) => {
+            let key = match (error, draft.awaiting.as_str(), draft.title.is_empty()) {
+                (TimeError::Past, _, _) => "time_past",
+                (TimeError::Invalid, _, _) | (TimeError::Missing, "time", _) => "time_unclear",
+                (TimeError::Missing, _, true) => "ask_time",
+                (TimeError::Missing, _, false) => "ask_time_for",
+            };
+            let text = cx.msg(key, &[("title", &draft.title)]);
+            draft.time = TimeExpr::default();
+            draft.awaiting = "time".into();
+            cx.ask("create.time", json!(draft));
+            return Reply::question(text);
+        }
+    };
+    if draft.title.is_empty() {
+        draft.awaiting = "title".into();
+        cx.ask("create.title", json!(draft));
+        return Reply::question(cx.msg("ask_title", &[]));
+    }
+    save(cx, &draft, &resolved)
+}
+
+fn save(cx: &mut Cx, draft: &Draft, at: &Resolved) -> Reply {
+    let due = at.at.as_millisecond();
+    let when = describe(at.at, &cx.now, cx.lang, at.date_only);
+    let repeat = at.repeat.as_ref().map(|r| r.code()).unwrap_or_default();
+    let title = draft.title.as_str();
+    let destination = cx.host.setting("reminder.destination").unwrap_or_else(|| "local".into());
+    let to_tasks = |cx: &Cx| {
+        let lists = cx.host.task_lists().unwrap_or_default();
+        let list_id = draft.list_hint.as_ref().and_then(|hint| lists.iter().find(|l| l.name.to_lowercase().contains(hint.as_str()) || hint.contains(&l.name.to_lowercase()))).map(|l| l.id.clone());
+        cx.host.create_task(&ExternalTask { title: title.into(), due_at: Some(due), date_only: at.date_only, list_id, repeat: repeat.clone() })
+    };
+    let to_calendar = |cx: &Cx| cx.host.create_event(&ExternalEvent { title: title.into(), start_at: due, minutes: 30, repeat: repeat.clone() });
+    let outside = match destination.as_str() {
+        "tasks" => Some(to_tasks(cx).map(|list| cx.msg("created_tasks", &[("title", title), ("when", &when), ("list", &list)]))),
+        "calendar" => Some(to_calendar(cx).map(|cal| cx.msg("created_calendar", &[("title", title), ("when", &when), ("calendar", &cal)]))),
+        "both" => Some(to_tasks(cx).and_then(|list| to_calendar(cx).map(|cal| cx.msg("created_both", &[("title", title), ("when", &when), ("list", &list), ("calendar", &cal)])))),
+        _ => None,
+    };
+    if let Some(Ok(text)) = outside {
+        return Reply::done(text);
+    }
+    let now = cx.now_ms();
+    let mut entry = Entry::new(cx.new_id(), EntryKind::Reminder, title, now, &cx.host.zone());
+    entry.due_at = Some(due);
+    entry.repeat = repeat.clone();
+    cx.store.put(entry.clone());
+    let _ = cx.host.schedule(&entry);
+    let text = if outside.is_some() {
+        cx.msg("fallback_local", &[("title", title), ("when", &when)])
+    } else if repeat.is_empty() {
+        cx.msg("created", &[("title", title), ("when", &when)])
+    } else {
+        let every = cx.lang.messages.get(&format!("repeat.{}", if repeat.starts_with("days:") { "weekly" } else { repeat.as_str() }), &[]);
+        cx.msg("created_repeat", &[("title", title), ("when", &when), ("repeat", &every)])
+    };
+    Reply::done(text).with_card(Card::Entries { title: cx.msg("card_title", &[]), items: vec![entry] })
+}
+
+fn open(cx: &Cx) -> Vec<Entry> {
+    let mut all: Vec<Entry> = cx.store.all(Some(EntryKind::Reminder)).into_iter().filter(|e| e.pending).collect();
+    all.sort_by_key(|e| e.due_at.unwrap_or(i64::MAX));
+    all
+}
+
+fn spoken(cx: &Cx, entry: &Entry) -> String {
+    let when = entry.due_at.and_then(|d| jiff::Timestamp::from_millisecond(d).ok()).map(|t| describe(t, &cx.now, cx.lang, false)).unwrap_or_default();
+    cx.msg("item", &[("title", &entry.title), ("when", &when)])
+}
+
+fn list(cx: &mut Cx) -> Reply {
+    let mut items = open(cx);
+    let norms = cx.utt.norms();
+    // "for tomorrow": only that day
+    if let Some(iris_core::time::DayRef::Offset(days)) = scan(&norms, cx.lang).expr.day {
+        let day = cx.now.date().checked_add(jiff::ToSpan::days(days as i64)).unwrap_or(cx.now.date());
+        items.retain(|e| e.due_at.and_then(|d| jiff::Timestamp::from_millisecond(d).ok()).is_some_and(|t| t.to_zoned(cx.now.time_zone().clone()).date() == day));
+    }
+    if items.is_empty() {
+        return Reply::done(cx.msg("none", &[]));
+    }
+    let wants_next = cx.list("next").iter().any(|p| cx.utt.norm.contains(p.as_str()));
+    if wants_next {
+        let first = items.remove(0);
+        let when = spoken(cx, &first);
+        let when = when.strip_prefix(&first.title).unwrap_or(&when).trim().to_string();
+        return Reply::done(cx.msg("next", &[("title", &first.title), ("when", &when)])).with_card(Card::Entries { title: cx.msg("card_title", &[]), items: vec![first] });
+    }
+    let lines = items.iter().map(|e| spoken(cx, e)).collect::<Vec<_>>().join(", ");
+    Reply::done(cx.messages.plural("list", items.len() as i64, &[("items", &lines)])).with_card(Card::Entries { title: cx.msg("card_title", &[]), items })
+}
+
+fn delete(cx: &mut Cx, answering: bool) -> Reply {
+    let items = open(cx);
+    if items.is_empty() {
+        return Reply::done(cx.msg("none", &[]));
+    }
+    if cx.utt.tokens.iter().any(|t| cx.list("all").contains(&t.norm)) {
+        cx.ask("delete.confirm", json!({}));
+        return Reply::question(cx.messages.plural("confirm_all", items.len() as i64, &[]));
+    }
+    let said = &cx.utt.norm;
+    let hit = items.iter().filter(|e| said.contains(&e.title.to_lowercase())).max_by_key(|e| e.title.len());
+    match hit {
+        Some(entry) => {
+            cx.store.delete(&entry.id);
+            cx.host.unschedule(&entry.id);
+            Reply::done(cx.msg("deleted", &[("title", &entry.title)]))
+        }
+        None if answering => Reply::failed(cx.msg("not_found", &[])),
+        None => {
+            cx.ask("delete.which", json!({}));
+            Reply::question(cx.msg("which_delete", &[])).with_card(Card::Entries { title: cx.msg("card_title", &[]), items })
+        }
+    }
+}
+
+fn delete_all(cx: &mut Cx) -> Reply {
+    if !cx.lang.dialog.is_yes(&cx.utt.norm) {
+        return Reply::done(cx.msg("kept", &[]));
+    }
+    let items = open(cx);
+    for e in &items {
+        cx.store.delete(&e.id);
+        cx.host.unschedule(&e.id);
+    }
+    Reply::done(cx.messages.plural("deleted_all", items.len() as i64, &[]))
+}

@@ -1,0 +1,13 @@
+[package]
+name = "iris-core"
+description = "The Iris engine: language packs, time expressions, skills, routing and dialogue. No UI, no platform code."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+regex.workspace = true
+jiff.workspace = true

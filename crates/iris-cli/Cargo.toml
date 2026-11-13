@@ -1,0 +1,18 @@
+[package]
+name = "iris-cli"
+description = "Iris in a terminal: talk to the engine, or run the conversation specs."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "iris"
+path = "src/main.rs"
+
+[dependencies]
+iris-core.workspace = true
+iris-skills.workspace = true
+jiff.workspace = true

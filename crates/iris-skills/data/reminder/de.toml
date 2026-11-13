@@ -1,0 +1,62 @@
+[[pattern]]
+intent = "delete"
+re = '\b(?:lösch\w*|entfern\w*|streich\w*)\b.*\berinnerung(?:en)?\b'
+
+[[pattern]]
+intent = "list"
+re = '\b(?:welche|was für|zeig\w*|nenn\w*|habe ich|hab ich|gibt es|meine|wie viele)\b.*\berinnerung(?:en)?\b|\bnächste erinnerung\b|\bworan\b.*\berinner\w*\b'
+
+[[pattern]]
+intent = "create"
+re = '\berinner\w*\b|^vergiss nicht\b|\b(?:erstell\w*|leg\w*|mach\w*|neue|stell\w*)\b.*\baufgabe\b|\bsag\w* mir\b.*\bbescheid\b|\bbescheid\b.*\bsag\w*\b'
+
+[expressions]
+# "auf meine Arbeitsliste", "in die Liste Arbeit": the list of the task app a reminder should go to
+list_hint = '\b(?:auf|in|zu|zur) (?:meine[rn]? |die |der |den )?(?:(?P<a>\p{L}+?)s?liste|liste (?P<b>\p{L}+))\b'
+
+# German puts "zu" inside a separable verb: "rauszubringen" is the task "rausbringen"
+[[rewrite]]
+re = '(?i)\b(raus|rein|ein|auf|ab|an|aus|mit|vor|weg|zurück|hin|her|um|nach|durch|weiter|los|fest|hoch|runter|rüber|vorbei)zu(\p{L}{3,}n)\b'
+to = '${1}${2}'
+
+[words]
+# removed wherever they stand
+drop = ["erinnert werden", "erinnert", "vergiss nicht", "erinnere mich", "erinner mich", "erinnere", "erinner", "erinnern", "erinnerung", "erinnerungen", "sag mir bescheid", "sagst du mir bescheid", "bescheid sagen", "bescheid", "aufgabe"]
+# removed from the front of the title, again and again
+lead = ["kannst du", "könntest du", "würdest du", "ich möchte", "ich will", "ich muss", "erstelle", "erstell", "stelle", "stell", "lege", "leg", "mache", "mach", "mir", "mich", "eine", "einen", "ein", "neue", "für", "an", "ans", "am", "daran", "dran", "dass ich", "dass", "den", "die", "das", "dem", "zum", "zur", "zu", "und", "oder", "ja", "noch", "dich", "an"]
+# removed from the end of the title
+trail = ["muss", "soll", "möchte", "will", "müssen", "sollen", "an", "ein", "und", "dran", "daran", "denken"]
+all = ["alle", "alles", "sämtliche"]
+next = ["nächste", "nächstes", "als nächstes"]
+
+[messages]
+ask_time = "Um wie viel Uhr, oder wann soll ich dich erinnern?"
+ask_time_for = "Wann soll ich dich an „{title}“ erinnern?"
+ask_title = "Wie soll die Erinnerung heißen?"
+time_unclear = "Den Zeitpunkt kann ich nicht eindeutig planen. Wann soll ich dich erinnern?"
+time_past = "Dieser Zeitpunkt ist schon vorbei. Wann soll ich dich erinnern?"
+created = "Ich erinnere dich {when} an „{title}“."
+created_repeat = "Ich erinnere dich {repeat} an „{title}“, zum ersten Mal {when}."
+created_tasks = "„{title}“ steht {when} in deiner Aufgabenliste {list}."
+created_calendar = "„{title}“ steht {when} im Kalender {calendar}."
+created_both = "„{title}“ steht {when} in deiner Aufgabenliste {list} und im Kalender {calendar}."
+fallback_local = "Deine Aufgaben-App war nicht erreichbar. Ich erinnere dich selbst {when} an „{title}“."
+none = "Du hast keine offenen Erinnerungen."
+"list.one" = "Du hast eine Erinnerung: {items}."
+"list.other" = "Du hast {n} Erinnerungen: {items}."
+item = "{title} {when}"
+next = "Als Nächstes: {title} {when}."
+card_title = "Erinnerungen"
+deleted = "Erinnerung „{title}“ gelöscht."
+which_delete = "Welche Erinnerung soll ich löschen?"
+"confirm_all.one" = "Wirklich deine Erinnerung löschen?"
+"confirm_all.other" = "Wirklich alle {n} Erinnerungen löschen?"
+"deleted_all.one" = "Erinnerung gelöscht."
+"deleted_all.other" = "{n} Erinnerungen gelöscht."
+kept = "Okay, sie bleiben."
+not_found = "Diese Erinnerung habe ich nicht gefunden."
+
+[training]
+create = ["erinnere mich {when} an {title}", "erinner mich an {title} {when}", "kannst du mich {when} an {title} erinnern", "sag mir {when} bescheid dass ich {title} muss", "erstelle eine erinnerung {when} {title}"]
+list = ["welche erinnerungen habe ich", "was ist meine nächste erinnerung", "zeig mir meine erinnerungen für {day}"]
+delete = ["lösche die erinnerung {title}", "lösche alle erinnerungen"]

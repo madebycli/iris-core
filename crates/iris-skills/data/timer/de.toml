@@ -1,0 +1,38 @@
+[[pattern]]
+intent = "cancel"
+re = '\b(?:beend\w*|stopp\w*|lösch\w*|brich|entfern\w*|abbrechen)\b.*\b\w*timer\b|\b\w*timer\b.*\b(?:beenden|stoppen|löschen|abbrechen|aus|weg|ab)$'
+
+[[pattern]]
+intent = "query"
+re = '\b(?:wie lange|wie viel zeit|wann|welche|laufen|läuft)\b.*\b\w*timer\b|\b\w*timer\b.*\b(?:noch|übrig)\b'
+
+[[pattern]]
+intent = "set"
+re = '\b(?:\w*timer|zeitgeber|countdown)\b'
+
+[words]
+# taken out of what is left after the duration; the rest is the timer's name
+noise = ["timer", "zeitgeber", "countdown", "stell", "stelle", "stellen", "setz", "setze", "mach", "mache", "starte", "start", "erstelle", "mir", "einen", "ein", "eine", "nen", "neuen", "auf", "für", "von", "mit", "den", "der", "die", "das", "namens", "und", "an", "ich", "brauche", "kannst", "du"]
+name_suffix = ["timer"]
+all = ["alle", "alles", "sämtliche", "beide"]
+
+[messages]
+set = "Timer für {duration} läuft."
+set_named = "{name}-Timer für {duration} läuft."
+ask_duration = "Wie lange soll der Timer laufen?"
+too_long = "Bitte wähle eine Dauer zwischen einer Sekunde und sieben Tagen."
+none = "Es läuft kein Timer."
+left = "Noch {left}."
+left_named = "{name}: noch {left}."
+cancelled = "Timer beendet."
+cancelled_named = "{name}-Timer beendet."
+"cancelled_all.one" = "{n} Timer beendet."
+"cancelled_all.other" = "{n} Timer beendet."
+which = "Welchen Timer soll ich beenden: {names}?"
+not_found = "Diesen Timer habe ich nicht gefunden."
+default_name = "Timer"
+
+[training]
+set = ["timer für {duration}", "stell einen timer auf {duration}", "{name} timer {duration}", "weck mich in {duration}"]
+query = ["wie lange läuft der timer noch", "wie viel zeit ist noch auf dem {name} timer"]
+cancel = ["beende den timer", "stopp den {name} timer"]

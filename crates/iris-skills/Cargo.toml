@@ -1,0 +1,13 @@
+[package]
+name = "iris-skills"
+description = "The skills Iris ships with. Logic in Rust, every word in data/<skill>/<language>.toml."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+iris-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+regex.workspace = true
+jiff.workspace = true

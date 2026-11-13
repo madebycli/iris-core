@@ -1,0 +1,142 @@
+# English language pack of the Iris core.
+code = "en"
+
+[numbers]
+[numbers.words]
+zero = 0
+a = 1
+an = 1
+one = 1
+two = 2
+three = 3
+four = 4
+five = 5
+six = 6
+seven = 7
+eight = 8
+nine = 9
+ten = 10
+eleven = 11
+twelve = 12
+thirteen = 13
+fourteen = 14
+fifteen = 15
+sixteen = 16
+seventeen = 17
+eighteen = 18
+nineteen = 19
+hundred = 100
+[numbers.tens]
+twenty = 20
+thirty = 30
+forty = 40
+fifty = 50
+sixty = 60
+seventy = 70
+eighty = 80
+ninety = 90
+
+[time]
+in_words = ["in"]
+and_words = ["and"]
+clock_markers = ["at", "around", "by"]
+oclock = ["o'clock", "oclock"]
+half = ["half past"]
+half_means = "after"
+quarter_past = ["quarter past", "a quarter past"]
+quarter_to = ["quarter to", "a quarter to"]
+past = ["past", "after"]
+to = ["to", "before"]
+am = ["am", "a.m"]
+pm = ["pm", "p.m"]
+date_fillers = ["on", "the"]
+date_joiners = ["of"]
+next_words = ["next", "this coming"]
+every_words = ["every", "each"]
+[time.units]
+second = ["second", "seconds", "sec", "secs"]
+minute = ["minute", "minutes", "min", "mins"]
+hour = ["hour", "hours", "hr", "hrs"]
+day = ["day", "days"]
+week = ["week", "weeks"]
+[time.fractions]
+"half an hour" = 1800
+"half hour" = 1800
+"quarter of an hour" = 900
+"hour and a half" = 5400
+[time.day_offsets]
+today = 0
+tomorrow = 1
+"the day after tomorrow" = 2
+"day after tomorrow" = 2
+[time.period_after_day]
+[time.weekdays]
+monday = 1
+tuesday = 2
+wednesday = 3
+thursday = 4
+friday = 5
+saturday = 6
+sunday = 7
+[time.months]
+january = 1
+february = 2
+march = 3
+april = 4
+may = 5
+june = 6
+july = 7
+august = 8
+september = 9
+october = 10
+november = 11
+december = 12
+[time.named]
+noon = "12:00"
+midday = "12:00"
+midnight = "00:00"
+[time.periods]
+morning = ["in the morning", "this morning", "morning"]
+afternoon = ["in the afternoon", "this afternoon", "afternoon"]
+evening = ["in the evening", "this evening", "tonight", "evening"]
+night = ["at night", "night"]
+[time.repeat]
+daily = ["daily", "every day", "each day"]
+weekdays = ["every weekday", "on weekdays", "weekdays"]
+weekly = ["weekly", "every week"]
+
+[dialog]
+fillers = ["please", "um", "uh", "hey", "iris", "just"]
+cancel = ["cancel", "stop", "never mind", "nevermind", "forget it", "abort", "no thanks", "leave it"]
+yes = ["yes", "yeah", "yep", "sure", "ok", "okay", "do it", "right", "correct"]
+no = ["no", "nope", "do not", "wrong"]
+done = ["no", "nope", "that is all", "that's all", "that is it", "that's it", "done", "nothing", "nothing else", "thanks", "no thanks", "enough"]
+
+[format]
+clock = "{h}:{mm}"
+date = "{m}/{d}"
+weekday_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+list_and = "and"
+
+[messages]
+cancelled = "Okay, cancelled."
+not_understood = "I did not understand that."
+"when.today" = "today at {time}"
+"when.tomorrow" = "tomorrow at {time}"
+"when.weekday" = "on {weekday} at {time}"
+"when.date" = "on {date} at {time}"
+"day.today" = "today"
+"day.tomorrow" = "tomorrow"
+"day.weekday" = "on {weekday}"
+"day.date" = "on {date}"
+"unit.second.one" = "{n} second"
+"unit.second.other" = "{n} seconds"
+"unit.minute.one" = "{n} minute"
+"unit.minute.other" = "{n} minutes"
+"unit.hour.one" = "{n} hour"
+"unit.hour.other" = "{n} hours"
+"unit.day.one" = "{n} day"
+"unit.day.other" = "{n} days"
+"repeat.daily" = "every day"
+"repeat.weekdays" = "on weekdays"
+"repeat.weekly" = "every week"

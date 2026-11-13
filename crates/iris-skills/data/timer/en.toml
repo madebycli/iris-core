@@ -1,0 +1,37 @@
+[[pattern]]
+intent = "cancel"
+re = '\b(?:cancel|stop|end|delete|remove|kill|clear)\b.*\btimers?\b'
+
+[[pattern]]
+intent = "query"
+re = '\b(?:how long|how much time|when|which|what)\b.*\btimers?\b|\btimers?\b.*\b(?:left|remaining)\b'
+
+[[pattern]]
+intent = "set"
+re = '\b(?:timers?|countdown)\b'
+
+[words]
+noise = ["timer", "countdown", "set", "start", "make", "create", "me", "a", "an", "the", "new", "for", "to", "of", "with", "named", "called", "and", "i", "need", "can", "you"]
+name_suffix = []
+all = ["all", "every", "both", "everything"]
+
+[messages]
+set = "Timer set for {duration}."
+set_named = "{name} timer set for {duration}."
+ask_duration = "How long should the timer run?"
+too_long = "Choose a duration between one second and seven days."
+none = "No timer is running."
+left = "{left} left."
+left_named = "{name}: {left} left."
+cancelled = "Timer cancelled."
+cancelled_named = "{name} timer cancelled."
+"cancelled_all.one" = "{n} timer cancelled."
+"cancelled_all.other" = "{n} timers cancelled."
+which = "Which timer should I cancel: {names}?"
+not_found = "I did not find that timer."
+default_name = "Timer"
+
+[training]
+set = ["set a timer for {duration}", "{duration} timer", "set a {name} timer for {duration}"]
+query = ["how long is left on the timer", "how much time is left on my {name} timer"]
+cancel = ["cancel the timer", "stop the {name} timer"]

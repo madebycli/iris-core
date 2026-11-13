@@ -1,0 +1,26 @@
+id = "reminder"
+priority = 20
+capabilities = ["schedule", "tasks", "calendar"]
+
+[[intent]]
+id = "create"
+acts = ["reminder_create"]
+
+[[intent]]
+id = "list"
+
+[[intent]]
+id = "delete"
+
+# answers to the skill's own questions
+[[intent]]
+id = "create.time"
+
+[[intent]]
+id = "create.title"
+
+[[intent]]
+id = "delete.which"
+
+[[intent]]
+id = "delete.confirm"

@@ -1,0 +1,22 @@
+id = "timer"
+priority = 10
+capabilities = ["schedule"]
+
+[[intent]]
+id = "set"
+acts = ["timer_set"]
+
+[[intent]]
+id = "query"
+acts = ["timer_query"]
+
+[[intent]]
+id = "cancel"
+acts = ["timer_cancel"]
+
+# answers to the skill's own questions
+[[intent]]
+id = "set.duration"
+
+[[intent]]
+id = "cancel.which"
