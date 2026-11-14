@@ -130,8 +130,8 @@ fn cancel(cx: &mut Cx, answering: bool) -> Reply {
         return Reply::question(cx.msg("which", &[("names", &names)]));
     };
     for t in &targets {
-        cx.store.delete(&t.id);
         cx.host.unschedule(&t.id);
+        cx.store.delete(&t.id);
     }
     match targets.as_slice() {
         [one] => match label(cx, one) {

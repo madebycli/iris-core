@@ -185,8 +185,8 @@ fn delete(cx: &mut Cx, answering: bool) -> Reply {
     let hit = items.iter().filter(|e| said.contains(&e.title.to_lowercase())).max_by_key(|e| e.title.len());
     match hit {
         Some(entry) => {
-            cx.store.delete(&entry.id);
             cx.host.unschedule(&entry.id);
+            cx.store.delete(&entry.id);
             Reply::done(cx.msg("deleted", &[("title", &entry.title)]))
         }
         None if answering => Reply::failed(cx.msg("not_found", &[])),
@@ -203,8 +203,8 @@ fn delete_all(cx: &mut Cx) -> Reply {
     }
     let items = open(cx);
     for e in &items {
-        cx.store.delete(&e.id);
         cx.host.unschedule(&e.id);
+        cx.store.delete(&e.id);
     }
     Reply::done(cx.messages.plural("deleted_all", items.len() as i64, &[]))
 }
