@@ -13,6 +13,7 @@
 //! @clock missing                 no clock app / @alarms unconfirmed: the clock app gives no receipt
 //! @advance 90s                   time passes (s, m, h)
 //! @fire Title                    the app reports that the reminder or timer with this title went off
+//! @rang Title                    the app rang it with its own scheduler (the core only remembers which one)
 //! > what the user says
 //! < text the reply must contain  (case does not matter)
 //! <! text the reply must not contain
@@ -203,6 +204,15 @@ pub fn run_spec(source: &str) -> (usize, Vec<Failure>) {
                     }
                     None => fail(format!("bad @item {value:?}")),
                 },
+                "rang" => {
+                    drop(host);
+                    if let Some(id) = session.store.all(None).into_iter().find(|e| e.title == value).map(|e| e.id) {
+                        session.engine.rang(&id);
+                    } else {
+                        fail(format!("@rang: nothing titled {value:?}"));
+                    }
+                    continue;
+                }
                 "fire" => {
                     drop(host);
                     if let Some(id) = session.store.all(None).into_iter().find(|e| e.title == value).map(|e| e.id) {

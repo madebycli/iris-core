@@ -337,6 +337,12 @@ impl Engine {
         Reply::done(lang.messages.get("undone", &[]))
     }
 
+    /// The app has rung a reminder itself (its own scheduler re-plans repeats and marks it done). The core only
+    /// remembers which one it was, so "remind me again in ten minutes" means that one.
+    pub fn rang(&mut self, id: &str) {
+        self.memory.insert("reminder.fired".into(), (id.to_string(), self.host.now_ms()));
+    }
+
     /// The app reports that a reminder or timer went off. A repeating entry is planned again; the others are finished.
     pub fn fired(&mut self, id: &str) {
         let Some(mut entry) = self.store.get(id) else { return };

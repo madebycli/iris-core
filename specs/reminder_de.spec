@@ -330,3 +330,12 @@
 > Lösche die Erinnerung Oma
 > Rückgängig
 = reminder "Oma" 2026-11-10T17:00
+
+## snooze the reminder the app rang, even when another one was made later
+> Erinnere mich um 16:30 Uhr an Oma
+> Erinnere mich morgen um 9 Uhr an den Bus
+@advance 31m
+@rang Oma
+> Erinnere mich in 10 Minuten nochmal
+= reminder "Oma" 2026-11-10T16:41
+= reminder "Bus" 2026-11-11T09:00

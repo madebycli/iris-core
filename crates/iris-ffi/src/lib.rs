@@ -155,7 +155,13 @@ impl IrisCore {
         self.engine.lock().unwrap().has_question()
     }
 
-    /// A reminder or timer went off.
+    /// The app rang a reminder with its own scheduler (repeats and "done" are the app's business):
+    /// the core remembers it, so "erinnere mich in 10 Minuten nochmal" means this one.
+    pub fn rang(&self, id: String) {
+        self.engine.lock().unwrap().rang(&id);
+    }
+
+    /// A reminder or timer went off and the core should plan what comes next.
     pub fn fired(&self, id: String) {
         self.engine.lock().unwrap().fired(&id);
     }
