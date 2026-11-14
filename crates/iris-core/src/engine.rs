@@ -244,7 +244,9 @@ impl Engine {
                 // a plain "no" answers a yes/no or a "anything else?" for the skill; for every other question it backs out
                 let skill_answers_no = p.intent.ends_with(".more") || p.intent.ends_with(".confirm") || p.intent.ends_with(".name");
                 let words = Utterance::words(text);
-                if lang.dialog.cancels(&words) || lang.dialog.is_cancel(&utt.norm) || (!skill_answers_no && lang.dialog.only_no(&words)) {
+                // the skill's own answer to its question wins over a cancel word ("egal" = "no name" for a timer's name)
+                let skill_answer = self.skills[p.skill].langs.get(&lang.code).and_then(|l| l.words.get("no_name")).is_some_and(|list| p.intent.ends_with(".name") && list.contains(&words.join(" ")));
+                if !skill_answer && (lang.dialog.cancels(&words) || lang.dialog.is_cancel(&utt.norm) || (!skill_answers_no && lang.dialog.only_no(&words))) {
                     let mut r = Reply::done(lang.messages.get("cancelled", &[]));
                     r.skill = "core".into();
                     r.intent = "cancel".into();

@@ -659,3 +659,14 @@
 > Erstelle eine Erinnerung
 > Halt
 = count reminder 0
+
+## "egal" backs out of a question ...
+> Erstelle eine Erinnerung
+> Egal
+= count reminder 0
+
+## ... but answers the name question of a timer
+> Timer
+> zehn Minuten
+> Egal
+= timer "Timer" 600s
