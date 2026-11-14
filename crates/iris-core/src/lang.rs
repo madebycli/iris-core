@@ -115,6 +115,12 @@ pub struct DialogWords {
     pub cancel: Vec<String>,
     #[serde(default)]
     pub undo: Vec<String>,
+    /// "Say that again": the last answer, read once more.
+    #[serde(default)]
+    pub say_again: Vec<String>,
+    /// "Do that again": the last request, run once more.
+    #[serde(default)]
+    pub repeat: Vec<String>,
     pub yes: Vec<String>,
     pub no: Vec<String>,
     pub done: Vec<String>,
@@ -126,6 +132,12 @@ impl DialogWords {
     }
     pub fn is_cancel(&self, text: &str) -> bool {
         Self::is(&self.cancel, text)
+    }
+    pub fn is_say_again(&self, text: &str) -> bool {
+        Self::is(&self.say_again, text)
+    }
+    pub fn is_repeat(&self, text: &str) -> bool {
+        Self::is(&self.repeat, text)
     }
     pub fn is_undo(&self, text: &str) -> bool {
         Self::is(&self.undo, text)

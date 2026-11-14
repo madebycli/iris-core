@@ -17,7 +17,7 @@ pub mod store;
 pub mod text;
 pub mod time;
 
-pub use engine::{Classifier, Engine, NoClassifier, Prediction};
+pub use engine::{Classifier, ConversationContext, Engine, NoClassifier, Prediction};
 pub use entry::{Entry, EntryKind};
 pub use host::{AlarmRequest, Capability, ExternalEvent, ExternalList, ExternalTask, Host, HostError};
 pub use lang::{LangPack, Messages};

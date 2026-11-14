@@ -99,3 +99,17 @@
 > Timer für 5 Minuten
 > Rückgängig
 = count timer 0
+
+## "sag das nochmal" repeats the last answer
+> Timer für 5 Minuten
+> Sag das nochmal
+< Timer für 5 Minuten
+
+## "wiederhole das" does the last thing again
+> Timer für 5 Minuten
+> Wiederhole das
+= count timer 2
+
+## nothing to repeat
+> Sag das nochmal
+= kind unhandled

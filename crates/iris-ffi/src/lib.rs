@@ -44,7 +44,7 @@ pub trait Phone: Send + Sync {
     fn delete_entry(&self, id: String) -> bool;
 
     /// The trained network: JSON `[{"label","p"}]`, most likely first; `[]` when it is not loaded.
-    fn classify(&self, text: String, lang: String) -> String;
+    fn classify(&self, text: String, lang: String, context: String) -> String;
 }
 
 struct Bridge(Arc<dyn Phone>);
@@ -113,12 +113,16 @@ impl Store for Bridge {
 
 impl Classifier for Bridge {
     fn classify(&self, text: &str, lang: &str) -> Vec<Prediction> {
+        self.classify_with(text, lang, &iris_core::ConversationContext::default())
+    }
+
+    fn classify_with(&self, text: &str, lang: &str, context: &iris_core::ConversationContext) -> Vec<Prediction> {
         #[derive(serde::Deserialize)]
         struct Row {
             label: String,
             p: f32,
         }
-        let rows: Vec<Row> = serde_json::from_str(&self.0.classify(text.to_string(), lang.to_string())).unwrap_or_default();
+        let rows: Vec<Row> = serde_json::from_str(&self.0.classify(text.to_string(), lang.to_string(), serde_json::to_string(context).unwrap_or_default())).unwrap_or_default();
         rows.into_iter().map(|r| Prediction { label: r.label, p: r.p }).collect()
     }
 }

@@ -27,9 +27,27 @@ pub struct Prediction {
     pub p: f32,
 }
 
+/// What the network is told about the conversation so far.
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct ConversationContext {
+    /// The acts of the last two turns (labels of the network), newest first.
+    pub last: String,
+    pub last2: String,
+    /// What a skill is waiting for: `("slot", "time")`, `("choice", "")`, `("confirm", "")`; empty when nothing is asked.
+    pub expect: String,
+    pub slot: String,
+    /// 1 when the last turn is more than two minutes old.
+    pub age: i32,
+}
+
 /// The trained network, seen from the engine: text in, acts out, most likely first.
 pub trait Classifier: Send + Sync {
     fn classify(&self, text: &str, lang: &str) -> Vec<Prediction>;
+
+    /// Same, with the conversation so far. A classifier that cannot use it ignores it.
+    fn classify_with(&self, text: &str, lang: &str, _context: &ConversationContext) -> Vec<Prediction> {
+        self.classify(text, lang)
+    }
 }
 
 /// Grammar only. Used until a network is plugged in, and in tests of the grammar itself.
@@ -56,6 +74,9 @@ struct Registered {
     langs: HashMap<String, Loaded>,
 }
 
+/// Entries as they were before a turn changed them.
+type Journal = Vec<(String, Option<crate::entry::Entry>)>;
+
 struct Pending {
     skill: usize,
     intent: String,
@@ -71,7 +92,12 @@ pub struct Engine {
     classifier: Box<dyn Classifier>,
     pending: Option<Pending>,
     /// What the last change touched, as it was before, and when: "rückgängig" restores it.
-    undo: Option<(i64, Vec<(String, Option<crate::entry::Entry>)>)>,
+    undo: Option<(i64, Journal)>,
+    /// The acts of the last turns (newest first), the last answer and the last request, for context and for "say that again".
+    history: Vec<String>,
+    last_reply: Option<String>,
+    last_request: Option<(String, String)>,
+    last_turn_ms: i64,
     memory: HashMap<String, (String, i64)>,
     ids: u64,
     /// Below this the classifier's answer is not acted on.
@@ -85,7 +111,7 @@ pub struct Engine {
 impl Engine {
     pub fn new(host: Arc<dyn Host>, store: Arc<dyn Store>) -> Self {
         let langs = LangPack::builtin().into_iter().map(|p| (p.code.clone(), Arc::new(p))).collect();
-        Self { langs, skills: Vec::new(), host, store, classifier: Box::new(NoClassifier), pending: None, undo: None, memory: HashMap::new(), ids: 0, cutoff: 0.60, question_ttl_ms: 120_000, undo_ttl_ms: 600_000 }
+        Self { langs, skills: Vec::new(), host, store, classifier: Box::new(NoClassifier), pending: None, undo: None, history: Vec::new(), last_reply: None, last_request: None, last_turn_ms: 0, memory: HashMap::new(), ids: 0, cutoff: 0.60, question_ttl_ms: 120_000, undo_ttl_ms: 600_000 }
     }
 
     pub fn add_language(&mut self, pack: LangPack) {
@@ -138,6 +164,38 @@ impl Engine {
 
     /// Answers one utterance said or typed in the language `code`.
     pub fn process(&mut self, text: &str, code: &str) -> Reply {
+        let reply = self.answer(text, code);
+        self.remember_turn(text, code, &reply);
+        reply
+    }
+
+    fn remember_turn(&mut self, text: &str, code: &str, reply: &Reply) {
+        if reply.kind == ReplyKind::Unhandled || reply.skill == "core" {
+            return;
+        }
+        let act = self.skills.iter().find(|r| r.manifest.id == reply.skill).and_then(|r| r.manifest.intents.iter().find(|i| i.id == reply.intent)).and_then(|i| i.acts.first().cloned()).unwrap_or_default();
+        self.history.insert(0, act);
+        self.history.truncate(2);
+        self.last_reply = Some(reply.text.clone());
+        if reply.kind != ReplyKind::Question {
+            self.last_request = Some((text.to_string(), code.to_string()));
+        }
+        self.last_turn_ms = self.host.now_ms();
+    }
+
+    fn context(&self, now_ms: i64) -> ConversationContext {
+        let (expect, slot) = match self.pending.as_ref().map(|p| p.intent.as_str()) {
+            None => ("", ""),
+            Some(i) if i.ends_with(".time") => ("slot", "time"),
+            Some(i) if i.ends_with(".duration") => ("slot", "duration"),
+            Some(i) if i.ends_with(".confirm") => ("confirm", ""),
+            Some(i) if i.ends_with(".which") => ("choice", ""),
+            Some(_) => ("slot", "title"),
+        };
+        ConversationContext { last: self.history.first().cloned().unwrap_or_default(), last2: self.history.get(1).cloned().unwrap_or_default(), expect: expect.into(), slot: slot.into(), age: i32::from(self.last_turn_ms > 0 && now_ms - self.last_turn_ms > 120_000) }
+    }
+
+    fn answer(&mut self, text: &str, code: &str) -> Reply {
         let Some(lang) = self.langs.get(code).or_else(|| self.langs.get("en")).cloned() else {
             return Reply::new(ReplyKind::Unhandled, "");
         };
@@ -162,6 +220,21 @@ impl Engine {
             r.skill = "core".into();
             r.intent = "undo".into();
             return r;
+        }
+        // "say that again" and "do that again" work on what the core did last
+        if lang.dialog.is_say_again(&raw_words) {
+            if let Some(last) = self.last_reply.clone() {
+                let mut r = Reply::done(last);
+                r.skill = "core".into();
+                r.intent = "say_again".into();
+                return r;
+            }
+        }
+        if lang.dialog.is_repeat(&raw_words) {
+            if let Some((again, again_code)) = self.last_request.clone() {
+                self.pending = None;
+                return self.answer(&again, &again_code);
+            }
         }
         // 1. an open question
         if let Some(p) = self.pending.take() {
@@ -196,7 +269,8 @@ impl Engine {
             }
         }
         // 3. the classifier
-        for prediction in self.classifier.classify(&utt.raw, &lang.code).into_iter().take(1) {
+        let context = self.context(now_ms);
+        for prediction in self.classifier.classify_with(&utt.raw, &lang.code, &context).into_iter().take(1) {
             if prediction.p < self.cutoff {
                 break;
             }

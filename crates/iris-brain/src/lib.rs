@@ -6,7 +6,7 @@ mod context;
 
 pub use context::Context;
 
-use iris_core::{Classifier, Prediction};
+use iris_core::{Classifier, ConversationContext, Prediction};
 use std::collections::HashMap;
 use std::path::Path;
 use tract_onnx::prelude::*;
@@ -187,10 +187,14 @@ impl Brain {
 }
 
 impl Classifier for Brain {
-    /// The likeliest acts for a sentence said with no earlier context. Follow-ups ("and tomorrow?")
-    /// need [`Brain::understand`] with a [`Context`]; the engine does not pass one yet.
+    /// The likeliest acts for a sentence, told what was said and asked before.
     fn classify(&self, text: &str, _lang: &str) -> Vec<Prediction> {
-        match self.understand(&Context::empty(), text) {
+        self.classify_with(text, _lang, &ConversationContext::default())
+    }
+
+    fn classify_with(&self, text: &str, _lang: &str, c: &ConversationContext) -> Vec<Prediction> {
+        let ctx = Context { last: c.last.clone(), last2: c.last2.clone(), expect: c.expect.clone(), slot: c.slot.clone(), age: c.age, focus: -1, ..Context::default() };
+        match self.understand(&ctx, text) {
             Ok(u) => u.acts.into_iter().map(|s| Prediction { label: s.label, p: s.p }).collect(),
             Err(_) => Vec::new(),
         }
