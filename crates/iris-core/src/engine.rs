@@ -92,7 +92,7 @@ pub struct Engine {
     classifier: Box<dyn Classifier>,
     pending: Option<Pending>,
     /// What the last change touched, as it was before, and when: "rückgängig" restores it.
-    undo: Option<(i64, Journal)>,
+    undo: Option<(i64, Journal, Vec<String>)>,
     /// The acts of the last turns (newest first), the last answer and the last request, for context and for "say that again".
     history: Vec<String>,
     last_reply: Option<String>,
@@ -297,16 +297,17 @@ impl Engine {
         let tz = TimeZone::get(&self.host.zone()).unwrap_or(TimeZone::UTC);
         let now = Timestamp::from_millisecond(now_ms).unwrap_or(Timestamp::UNIX_EPOCH).to_zoned(tz);
         let recording = RecordingStore::new(self.store.as_ref());
-        let mut cx = Cx { utt, slots, lang, messages: &loaded.messages, words: &loaded.words, expressions: &loaded.expressions, rewrites: &loaded.rewrites, tables: &loaded.tables, memory: &mut self.memory, skill_id: &reg.manifest.id, host: self.host.as_ref(), store: &recording, now, state, ask: None, ids: &mut self.ids };
+        let mut cx = Cx { utt, slots, lang, messages: &loaded.messages, words: &loaded.words, expressions: &loaded.expressions, rewrites: &loaded.rewrites, tables: &loaded.tables, memory: &mut self.memory, skill_id: &reg.manifest.id, host: self.host.as_ref(), store: &recording, now, state, ask: None, ids: &mut self.ids, restore: Vec::new() };
         let handled = reg.skill.handle(intent, &mut cx);
         let asked = cx.ask.take();
+        let restore = std::mem::take(&mut cx.restore);
         drop(cx);
         let journal = recording.into_journal();
         let mut reply = handled?;
         reply.skill = reg.manifest.id.clone();
         reply.intent = intent.to_string();
-        if !journal.is_empty() {
-            self.undo = Some((now_ms, journal));
+        if !journal.is_empty() || !restore.is_empty() {
+            self.undo = Some((now_ms, journal, restore));
         }
         if let Some((next, state)) = asked {
             reply.kind = ReplyKind::Question;
@@ -316,10 +317,13 @@ impl Engine {
     }
 
     fn take_back(&mut self, lang: &LangPack, now_ms: i64) -> Reply {
-        let Some((at, journal)) = self.undo.take().filter(|(at, _)| now_ms - at <= self.undo_ttl_ms) else {
+        let Some((_, journal, restore)) = self.undo.take().filter(|(at, _, _)| now_ms - at <= self.undo_ttl_ms) else {
             return Reply::done(lang.messages.get("nothing_to_undo", &[]));
         };
-        let _ = at;
+        let mut restored = true;
+        for token in restore.iter().rev() {
+            restored &= self.host.restore(token).is_ok();
+        }
         for (id, before) in journal.into_iter().rev() {
             self.host.unschedule(&id);
             match before {
@@ -334,7 +338,7 @@ impl Engine {
                 }
             }
         }
-        Reply::done(lang.messages.get("undone", &[]))
+        if restored { Reply::done(lang.messages.get("undone", &[])) } else { Reply::failed(lang.messages.get("undo_failed", &[])) }
     }
 
     /// The app has rung a reminder itself (its own scheduler re-plans repeats and marks it done). The core only

@@ -125,6 +125,7 @@ list_and = "and"
 
 [messages]
 undone = "Okay, undone."
+undo_failed = "Undo failed."
 nothing_to_undo = "There is nothing to undo."
 cancelled = "Okay, cancelled."
 not_understood = "I did not understand that."

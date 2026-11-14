@@ -159,6 +159,7 @@ list_and = "und"
 
 [messages]
 undone = "Okay, rückgängig gemacht."
+undo_failed = "Das Rückgängigmachen ist fehlgeschlagen."
 nothing_to_undo = "Es gibt nichts zum Rückgängigmachen."
 cancelled = "Okay, abgebrochen."
 not_understood = "Das habe ich nicht verstanden."

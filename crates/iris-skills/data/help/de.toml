@@ -1,0 +1,10 @@
+[[pattern]]
+intent = "examples"
+re = '^(?:befehle|befehlsliste|(?:zeig\w*|nenn\w*|sag\w*) (?:mir )?(?:die |deine |ein paar )?befehle|welche befehle (?:gibt es|kennst du|verstehst du))$'
+
+[words]
+examples = ["Erinnere mich morgen um 8 Uhr an die Blumen", "Timer für 10 Minuten", "Notiere die Paketnummer 12345", "Setze Milch auf die Einkaufsliste", "Hake Milch ab", "Starte die Stoppuhr", "Lautstärke auf 40 Prozent", "Fünf Meilen in Kilometer"]
+
+[messages]
+intro = "Zum Beispiel:"
+outro = "Deine Einträge findest du über das Listensymbol oben."

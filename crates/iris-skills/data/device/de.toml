@@ -1,0 +1,102 @@
+# A device setting is only handled when its whole argument is understood; anything else is left to other skills.
+
+[[pattern]]
+intent = "volume"
+re = '^(?:(?:setz\w*|stell\w*|mach\w*|dreh\w*|änder\w*) )?(?:die |meine )?(?:(?P<ring>klingellautstärke|klingeltonlautstärke|ruftonlautstärke)|medienlautstärke|musiklautstärke|lautstärke)(?: (?:auf|zu))? (?P<level>.+?)(?: (?:stellen|setzen|machen|drehen))?$'
+
+[[pattern]]
+intent = "volume"
+re = '^(?:(?:mach\w*|dreh\w*|stell\w*) )?(?:es |das |die musik |den ton |das handy |den sound )?(?:(?:etwas|ein bisschen|bisschen|ein wenig|noch) )?(?P<dir>lauter|leiser)(?: (?:machen|drehen|stellen))?$'
+
+[[pattern]]
+intent = "brightness"
+re = '^(?:(?:setz\w*|stell\w*|mach\w*|dreh\w*|änder\w*) )?(?:die )?(?:bildschirmhelligkeit|displayhelligkeit|helligkeit)(?: (?:auf|zu))? (?P<level>.+?)(?: (?:stellen|setzen|machen|drehen))?$'
+
+[[pattern]]
+intent = "brightness"
+re = '^(?:(?:mach\w*|dreh\w*|stell\w*) )?(?:es |den bildschirm |das display |den screen )?(?:(?:etwas|ein bisschen|bisschen|ein wenig|noch) )?(?P<dir>heller|dunkler)(?: (?:machen|drehen|stellen))?$'
+
+[[pattern]]
+intent = "dnd"
+re = '^(?:(?:aktivier\w*|schalt\w*|mach\w*|stell\w*) )?(?:den |das )?(?:bitte )?nicht stören(?: modus)?(?: (?P<off>aus|ab|deaktivieren|ausschalten|beenden|abschalten)| (?:an|ein|aktivieren|einschalten|anschalten))?$'
+
+[[pattern]]
+intent = "dnd"
+re = '^(?P<off>deaktivier\w*|beend\w*) (?:den |das )?nicht stören(?: modus)?$'
+
+[[pattern]]
+intent = "sound_mode"
+re = '^(?:(?:stell\w*|schalt\w*|mach\w*|setz\w*) )?(?:das handy |das telefon |mein handy |mein telefon |handy |telefon |den ton )?(?:auf )?(?P<mode>lautlos|stumm|vibration|vibrieren|vibrationsmodus|klingeln|laut|klingelton)(?: (?:an|ein|schalten|stellen|einschalten|machen))?$'
+
+[[pattern]]
+intent = "playing"
+re = '^(?:was (?:läuft|spielt)(?: (?:da|gerade|grad|jetzt|im moment))*|welche[rsn]? (?:lied|song|titel|musik) (?:läuft|ist das|spielt)(?: (?:da|gerade|grad|jetzt))*|wie heißt (?:das lied|der song|dieser song|dieses lied)(?: (?:da|gerade|grad))*)$'
+
+[[pattern]]
+intent = "notifications"
+re = '^(?:(?:lies|les\w*|zeig\w*) )?(?:mir )?(?:meine |die |neue |alle )?(?:benachrichtigungen|nachrichten|mitteilungen)(?: (?:von|aus|bei) (?P<app>.+?))?(?: (?:vor|an|vorlesen|zeigen|anzeigen))?$'
+
+[[pattern]]
+intent = "reply"
+re = '^(?:antworte|antwort|schreib\w*) (?:auf |bei |an |zurück an )?(?P<app>.+?) (?:mit|zurück) (?P<message>.+)$'
+
+[[pattern]]
+intent = "web_search"
+re = '^(?:such\w*|google\w*|schau\w*) (?:im (?:web|internet|netz|browser)|online|bei duckduckgo) nach (?P<query>.+)$'
+
+[expressions]
+message = '(?i)^.*?\b(?:mit|zurück)\s+(?P<m>.+)$'
+query = '(?i)^.*?\bnach\s+(?P<m>.+)$'
+
+[words]
+up = ["lauter", "heller", "hoch", "höher", "rauf", "nach oben", "mehr"]
+down = ["leiser", "dunkler", "runter", "niedriger", "nach unten", "weniger"]
+max = ["maximal", "maximum", "max", "ganz laut", "ganz hell", "voll", "ganz hoch", "auf voll"]
+min = ["minimal", "minimum", "min", "null", "stumm", "aus", "ganz leise", "ganz dunkel"]
+auto = ["automatisch", "auto", "adaptiv"]
+percent = ["prozent"]
+silent = ["lautlos", "stumm"]
+vibrate = ["vibration", "vibrieren", "vibrationsmodus"]
+
+[messages]
+"media_volume.percent" = "Medienlautstärke: {percent} Prozent."
+"media_volume.changed" = "Medienlautstärke geändert."
+"ring_volume.percent" = "Klingellautstärke: {percent} Prozent."
+"ring_volume.changed" = "Klingellautstärke geändert."
+"brightness.percent" = "Helligkeit auf {percent} Prozent gestellt."
+"brightness.changed" = "Helligkeit geändert."
+brightness_auto = "Automatische Helligkeit eingeschaltet."
+"sound_mode.silent" = "Das Handy ist jetzt lautlos."
+"sound_mode.vibrate" = "Das Handy vibriert jetzt nur."
+"sound_mode.ring" = "Das Handy klingelt wieder."
+dnd_on = "Nicht stören ist an. Andere Regeln deines Handys können weiter gelten."
+dnd_off = "Nicht stören ist aus. Andere Regeln deines Handys können weiter gelten."
+allow_settings = "Erlaube Iris, die Systemeinstellungen zu ändern, und sag es dann noch einmal. Ich habe die Einstellung geöffnet."
+allow_dnd = "Erlaube Iris den Zugriff auf Nicht stören, und sag es dann noch einmal. Ich habe die Einstellung geöffnet."
+unavailable = "Das kann ich an diesem Handy nicht einstellen."
+refused = "Android hat die Änderung nicht übernommen."
+searched = "Ich habe die Suche nach „{query}“ im Browser geöffnet."
+no_browser = "Es gibt keinen Browser, der die Suche öffnen kann."
+playing = "Gerade läuft {title}."
+playing_by = "Gerade läuft {title} von {artist}."
+playing_untitled = "Der Player nennt keinen Titel."
+no_player = "Ich erreiche keinen Player. Erlaube Iris bei Bedarf den Zugriff auf Benachrichtigungen unter Einstellungen, Fähigkeiten."
+allow_notifications = "Erlaube Iris zuerst den Zugriff auf Benachrichtigungen unter Einstellungen, Fähigkeiten."
+no_notifications = "Es gibt keine passenden Benachrichtigungen."
+no_reply_target = "Ich finde keine passende Benachrichtigung, auf die man antworten kann."
+which_conversation = "Welche Unterhaltung?"
+pick_number = "Sag mir bitte die Nummer der Unterhaltung."
+confirm_reply = "An „{to}“ antworten: „{message}“?"
+replied = "Ich habe die Antwort an die Nachrichten-App übergeben. Die Zustellung bestätigt sie selbst."
+reply_gone = "Die Benachrichtigung hat sich geändert. Bitte fang die Antwort noch einmal an."
+reply_failed = "Die Antwortfunktion ist nicht mehr verfügbar."
+
+[training]
+volume = ["lautstärke auf {n} prozent", "mach lauter", "klingellautstärke auf maximal"]
+brightness = ["helligkeit auf {n} prozent", "mach den bildschirm heller"]
+sound_mode = ["stell das handy auf lautlos", "handy auf vibration"]
+dnd = ["nicht stören an", "schalte nicht stören aus"]
+playing = ["was läuft gerade", "welches lied ist das"]
+notifications = ["lies meine benachrichtigungen vor", "lies die nachrichten von {app} vor"]
+reply = ["antworte {app} mit {text}"]
+web_search = ["suche im internet nach {text}"]

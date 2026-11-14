@@ -1,0 +1,25 @@
+[[pattern]]
+intent = "start"
+re = '^(?:start|begin) (?:the |a |my )?stopwatch$|^stopwatch (?:start|on|go)$'
+
+[[pattern]]
+intent = "stop"
+re = '^(?:stop|pause|halt|end) (?:the |my )?stopwatch$|^stopwatch (?:stop|off|pause)$'
+
+[[pattern]]
+intent = "reset"
+re = '^(?:reset|clear) (?:the |my )?stopwatch$|^stopwatch reset$'
+
+[[pattern]]
+intent = "read"
+re = '^(?:(?:read|show|check) )?(?:the |my )?stopwatch$|\bhow long\b.*\bstopwatch\b|\bstopwatch\b.*\b(?:time|say|show)\b'
+
+[messages]
+running = "Stopwatch: {time}, running."
+stopped = "Stopwatch: {time}, stopped."
+
+[training]
+start = ["start the stopwatch"]
+stop = ["stop the stopwatch"]
+reset = ["reset the stopwatch"]
+read = ["how long has the stopwatch been running"]

@@ -1,0 +1,15 @@
+id = "stopwatch"
+# above timers and reminders: "stopp die Stoppuhr" is not a cancel and not a timer
+priority = 26
+
+[[intent]]
+id = "start"
+
+[[intent]]
+id = "stop"
+
+[[intent]]
+id = "reset"
+
+[[intent]]
+id = "read"

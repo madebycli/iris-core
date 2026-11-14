@@ -1,0 +1,6 @@
+id = "convert"
+# below every other skill: "zwei Äpfel in den Korb" is not a conversion, and the units decide
+priority = 5
+
+[[intent]]
+id = "convert"

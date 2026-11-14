@@ -5,7 +5,7 @@
 //! JSON strings in the shapes `iris-core` serialises, so the generated bindings stay the same
 //! when a field is added.
 
-use iris_core::{Capability, Classifier, Engine, Entry, EntryKind, ExternalEvent, ExternalList, ExternalTask, Host, HostError, Prediction, Store};
+use iris_core::{Capability, Classifier, DeviceAction, DeviceResult, Engine, Entry, EntryKind, ExternalEvent, ExternalList, ExternalTask, Host, HostError, Notice, NowPlaying, Prediction, Store};
 use std::sync::{Arc, Mutex};
 
 uniffi::setup_scaffolding!();
@@ -36,6 +36,20 @@ pub trait Phone: Send + Sync {
     fn next_alarm(&self) -> Option<i64>;
     /// Opens the clock app's alarm list. False when there is none.
     fn show_alarms(&self) -> bool;
+
+    /// Keeps a small value across restarts, read back through `setting`. `None` removes it.
+    fn keep(&self, key: String, value: Option<String>);
+    /// Changes the phone (JSON of a device action, `{"action": "volume", ...}`). Returns JSON
+    /// `{"ok": true, "percent": 40, "restore": "token"}` or `{"ok": false, "error": "denied" | "missing" | "failed"}`.
+    fn device(&self, action: String) -> String;
+    /// Undoes a change with the token its result carried. False when that is no longer possible.
+    fn restore(&self, token: String) -> bool;
+    /// What the media player plays, as JSON `{"title","artist"}`; `"{}"` when it names no title; `None` when no player is reachable.
+    fn now_playing(&self) -> Option<String>;
+    /// Notifications of other apps as JSON `[{"key","app","title","text","can_reply"}]`, newest first; `None` without access.
+    fn notifications(&self, from: String) -> Option<String>;
+    /// Answers a notification. False when it cannot be answered any more.
+    fn reply_to(&self, key: String, message: String) -> bool;
 
     /// Stored entries as a JSON array, of one kind ("REMINDER", "TIMER", "NOTE", "LIST_ITEM") or all.
     fn entries(&self, kind: Option<String>) -> String;
@@ -78,6 +92,45 @@ impl Host for Bridge {
     }
     fn show_alarms(&self) -> Result<(), HostError> {
         self.0.show_alarms().then_some(()).ok_or(HostError::Unavailable)
+    }
+    fn keep(&self, key: &str, value: Option<&str>) {
+        self.0.keep(key.to_string(), value.map(str::to_string));
+    }
+    fn device(&self, action: &DeviceAction) -> Result<DeviceResult, HostError> {
+        #[derive(serde::Deserialize)]
+        struct Answer {
+            ok: bool,
+            #[serde(default)]
+            error: String,
+            #[serde(default)]
+            percent: Option<u8>,
+            #[serde(default)]
+            restore: Option<String>,
+        }
+        let json = serde_json::to_string(action).map_err(|e| HostError::Failed(e.to_string()))?;
+        let answer: Answer = serde_json::from_str(&self.0.device(json)).map_err(|e| HostError::Failed(e.to_string()))?;
+        if answer.ok {
+            return Ok(DeviceResult { percent: answer.percent, restore: answer.restore });
+        }
+        Err(match answer.error.as_str() {
+            "denied" => HostError::Denied,
+            "missing" => HostError::Unavailable,
+            other => HostError::Failed(other.to_string()),
+        })
+    }
+    fn restore(&self, token: &str) -> Result<(), HostError> {
+        self.0.restore(token.to_string()).then_some(()).ok_or(HostError::Unavailable)
+    }
+    fn now_playing(&self) -> Result<Option<NowPlaying>, HostError> {
+        let json = self.0.now_playing().ok_or(HostError::Unavailable)?;
+        Ok(serde_json::from_str::<NowPlaying>(&json).ok().filter(|p| !p.title.is_empty()))
+    }
+    fn notifications(&self, from: &str) -> Result<Vec<Notice>, HostError> {
+        let json = self.0.notifications(from.to_string()).ok_or(HostError::Denied)?;
+        serde_json::from_str(&json).map_err(|e| HostError::Failed(e.to_string()))
+    }
+    fn reply_to(&self, key: &str, message: &str) -> Result<(), HostError> {
+        self.0.reply_to(key.to_string(), message.to_string()).then_some(()).ok_or(HostError::Unavailable)
     }
     fn task_lists(&self) -> Result<Vec<ExternalList>, HostError> {
         let json = self.0.task_lists().ok_or(HostError::Unavailable)?;

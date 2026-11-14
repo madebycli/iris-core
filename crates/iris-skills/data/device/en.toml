@@ -1,0 +1,104 @@
+[[pattern]]
+intent = "volume"
+re = '^(?:(?:set|turn|change|put) )?(?:the |my )?(?:(?P<ring>ring volume|ringer volume|ringtone volume)|media volume|music volume|volume)(?: (?:to|at))? (?P<level>.+?)$'
+
+[[pattern]]
+intent = "volume"
+re = '^(?:(?:make|turn) )?(?:it |the music |the sound )?(?:(?:a bit|a little|slightly) )?(?P<dir>louder|quieter|softer)$'
+
+[[pattern]]
+intent = "volume"
+re = '^turn (?:it |the volume |the music )?(?P<dir>up|down)$'
+
+[[pattern]]
+intent = "brightness"
+re = '^(?:(?:set|turn|change|put) )?(?:the )?(?:screen brightness|display brightness|brightness)(?: (?:to|at))? (?P<level>.+?)$'
+
+[[pattern]]
+intent = "brightness"
+re = '^(?:make )?(?:it |the screen |the display )?(?:(?:a bit|a little|slightly) )?(?P<dir>brighter|dimmer|darker)$'
+
+[[pattern]]
+intent = "dnd"
+re = '^(?:(?:turn|switch|activate|enable|put) )?(?:on )?(?:do not disturb|dnd)(?: mode)?(?: (?P<off>off)| on)?$'
+
+[[pattern]]
+intent = "dnd"
+re = '^(?:(?:turn|switch) off|(?P<off>disable|deactivate|end)) (?:do not disturb|dnd)(?: mode)?$'
+
+[[pattern]]
+intent = "sound_mode"
+re = '^(?:(?:set|put|switch|turn) )?(?:the phone |my phone )?(?:to |on )?(?P<mode>silent|vibrate|vibration|ring|ringer)(?: mode)?(?: on)?$'
+
+[[pattern]]
+intent = "playing"
+re = '^(?:what(?: is|s) (?:playing|this song|that song)(?: right now| now)?|which song is (?:this|that|playing)|what song is (?:this|that|playing))$'
+
+[[pattern]]
+intent = "notifications"
+re = '^(?:(?:read|show) )?(?:me )?(?:my |the |new |all )?(?:notifications|messages)(?: from (?P<app>.+?))?$'
+
+[[pattern]]
+intent = "reply"
+re = '^(?:reply|answer|respond) to (?P<app>.+?) (?:with|saying) (?P<message>.+)$'
+
+[[pattern]]
+intent = "web_search"
+re = '^search the (?:web|internet) for (?P<query>.+)$|^(?:search|look up|google) (?:for )?(?P<query2>.+?) (?:on|in) the (?:web|internet)$'
+
+[expressions]
+message = '(?i)^.*?\b(?:with|saying)\s+(?P<m>.+)$'
+query = '(?i)^(?:search|look up|google)(?: the (?:web|internet))?(?: for)?\s+(?P<m>.+?)(?:\s+(?:on|in) the (?:web|internet))?[.!?]*$'
+
+[words]
+up = ["louder", "brighter", "up", "higher", "more"]
+down = ["quieter", "softer", "dimmer", "darker", "down", "lower", "less"]
+max = ["maximum", "max", "full"]
+min = ["minimum", "min", "zero", "mute", "off"]
+auto = ["automatic", "auto", "adaptive"]
+percent = ["percent", "per cent"]
+silent = ["silent"]
+vibrate = ["vibrate", "vibration"]
+
+[messages]
+"media_volume.percent" = "Media volume: {percent} percent."
+"media_volume.changed" = "Media volume changed."
+"ring_volume.percent" = "Ring volume: {percent} percent."
+"ring_volume.changed" = "Ring volume changed."
+"brightness.percent" = "Brightness set to {percent} percent."
+"brightness.changed" = "Brightness changed."
+brightness_auto = "Automatic brightness is on."
+"sound_mode.silent" = "The phone is silent now."
+"sound_mode.vibrate" = "The phone only vibrates now."
+"sound_mode.ring" = "The phone rings again."
+dnd_on = "Do Not Disturb is on. Other rules of your phone may still apply."
+dnd_off = "Do Not Disturb is off. Other rules of your phone may still apply."
+allow_settings = "Allow Iris to modify system settings, then say it again. I opened the setting."
+allow_dnd = "Allow Iris access to Do Not Disturb, then say it again. I opened the setting."
+unavailable = "I cannot change that on this phone."
+refused = "Android did not apply the change."
+searched = "I opened a search for “{query}” in the browser."
+no_browser = "No browser can open the search."
+playing = "Now playing: {title}."
+playing_by = "Now playing: {title} by {artist}."
+playing_untitled = "The player names no title."
+no_player = "I cannot reach a player. If needed, allow Iris notification access in Settings, Skills."
+allow_notifications = "First allow Iris notification access in Settings, Skills."
+no_notifications = "There are no matching notifications."
+no_reply_target = "I find no matching notification that can be answered."
+which_conversation = "Which conversation?"
+pick_number = "Please tell me the number of the conversation."
+confirm_reply = "Reply to “{to}”: “{message}”?"
+replied = "I handed the reply to the messaging app. It confirms delivery itself."
+reply_gone = "The notification changed. Please start the reply again."
+reply_failed = "The reply function is no longer available."
+
+[training]
+volume = ["volume to {n} percent", "make it louder"]
+brightness = ["brightness to {n} percent", "make the screen brighter"]
+sound_mode = ["set the phone to silent"]
+dnd = ["turn on do not disturb"]
+playing = ["what is playing right now"]
+notifications = ["read my notifications"]
+reply = ["reply to {app} with {text}"]
+web_search = ["search the web for {text}"]

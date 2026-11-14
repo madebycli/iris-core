@@ -3,7 +3,7 @@
 //! A bare hour is taken as said ("um fünf" is 5:00): the user who asks a clock for an alarm at
 //! five means the next five on a 24-hour dial, and the reply names the time in full.
 
-use iris_core::time::{describe, resolve, scan, HalfDay, TimeError, TimeExpr};
+use iris_core::time::{describe, resolve, scan, HalfDay, Repeat, TimeError, TimeExpr};
 use iris_core::{AlarmRequest, Cx, HostError, Reply, Skill};
 use serde_json::json;
 
@@ -29,6 +29,17 @@ impl Skill for Alarm {
                 Some(at) => Reply::done(cx.msg("next", &[("when", &describe(at, &cx.now, cx.lang, false))])),
                 None => Reply::done(cx.msg("none", &[])),
             }),
+            "dismiss" => {
+                cx.ask("dismiss.confirm", json!({}));
+                Some(Reply::question(cx.msg("dismiss_ask", &[])))
+            }
+            // neither yes nor no: a new request, the question is dropped
+            "dismiss.confirm" if cx.lang.dialog.is_no(&cx.utt.norm) => Some(Reply::done(cx.lang.messages.get("cancelled", &[]))),
+            "dismiss.confirm" if !cx.lang.dialog.is_yes(&cx.utt.norm) => None,
+            "dismiss.confirm" => Some(match cx.host.device(&iris_core::DeviceAction::DismissAlarm) {
+                Ok(_) => Reply::done(cx.msg("dismissed", &[])),
+                Err(_) => Reply::failed(cx.msg("no_clock", &[])),
+            }),
             "list" => Some(match cx.host.show_alarms() {
                 Ok(()) => Reply::done(cx.msg("list_opened", &[])),
                 Err(_) => Reply::failed(cx.msg("no_clock", &[])),
@@ -50,8 +61,25 @@ fn set(cx: &mut Cx) -> Reply {
         }
     };
     let z = resolved.at.to_zoned(cx.now.time_zone().clone());
-    let request = AlarmRequest { at_ms: resolved.at.as_millisecond(), hour: z.hour() as u8, minute: z.minute() as u8 };
-    let when = describe(resolved.at, &cx.now, cx.lang, false);
+    // a repeating alarm is one the clock app repeats on these weekdays (Monday = 1)
+    let days: Vec<u8> = match &resolved.repeat {
+        Some(Repeat::Daily) => (1..=7).collect(),
+        Some(Repeat::Weekdays) => (1..=5).collect(),
+        Some(Repeat::Weekly) => vec![z.weekday().to_monday_one_offset() as u8],
+        _ => Vec::new(),
+    };
+    let request = AlarmRequest { at_ms: resolved.at.as_millisecond(), hour: z.hour() as u8, minute: z.minute() as u8, days: days.clone() };
+    let when = if days.is_empty() {
+        describe(resolved.at, &cx.now, cx.lang, false)
+    } else {
+        let time = cx.lang.format.clock.replace("{h}", &z.hour().to_string()).replace("{mm}", &format!("{:02}", z.minute()));
+        let repeat = match &resolved.repeat {
+            Some(Repeat::Daily) => cx.msg("repeat.daily", &[]),
+            Some(Repeat::Weekdays) => cx.msg("repeat.weekdays", &[]),
+            _ => cx.msg("repeat.weekly", &[]),
+        };
+        cx.msg("repeating_when", &[("repeat", &repeat), ("time", &time)])
+    };
     match cx.host.set_alarm(&request) {
         Ok(true) => Reply::done(cx.msg("set", &[("when", &when)])),
         Ok(false) => Reply::done(cx.msg("handed_over", &[("when", &when)])),

@@ -13,6 +13,7 @@ name = "iris"
 path = "src/main.rs"
 
 [dependencies]
+serde_json.workspace = true
 iris-core.workspace = true
 iris-skills.workspace = true
 iris-brain = { path = "../iris-brain" }

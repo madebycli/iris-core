@@ -12,6 +12,9 @@
 //! @tasks down                    the task app cannot be reached
 //! @clock missing                 no clock app / @alarms unconfirmed: the clock app gives no receipt
 //! @advance 90s                   time passes (s, m, h)
+//! @device denied                 the phone refuses changes for want of a permission (or: failed, missing)
+//! @playing "Title" Artist        what the media player plays (@playing none: no player)
+//! @notice "App" "Title" "Text" reply   a notification of another app; "reply": it can be answered
 //! @fire Title                    the app reports that the reminder or timer with this title went off
 //! @rang Title                    the app rang it with its own scheduler (the core only remembers which one)
 //! > what the user says
@@ -25,9 +28,14 @@
 //! = item "Milch" list=Einkauf done      (or: open)
 //! = count reminder 1
 //! = kind question                done, question, failed or unhandled
+//! = device volume                the last change to the phone contains this (JSON text, e.g. "percent":40)
+//! = devices 0                    how many changes reached the phone
+//! = restored 1                   how many changes were taken back
+//! = replied "text"               a notification was answered with this text
+//! = kept stopwatch.started       the host keeps a value under this key (or: = kept !key, it keeps none)
 //! ```
 
-use iris_core::{AlarmRequest, Capability, Engine, Entry, EntryKind, ExternalEvent, ExternalList, ExternalTask, Host, HostError, MemoryStore, Reply, ReplyKind};
+use iris_core::{AlarmRequest, Capability, DeviceAction, DeviceResult, Engine, Entry, EntryKind, ExternalEvent, ExternalList, ExternalTask, Host, HostError, LevelChange, MemoryStore, Notice, NowPlaying, Reply, ReplyKind};
 use jiff::civil::DateTime;
 use jiff::tz::TimeZone;
 use std::collections::HashMap;
@@ -46,6 +54,13 @@ pub struct FakeState {
     pub alarms: Vec<iris_core::AlarmRequest>,
     pub alarms_unconfirmed: bool,
     pub clock_missing: bool,
+    /// "denied", "failed", "missing" or "" (works).
+    pub device_mode: String,
+    pub device: Vec<DeviceAction>,
+    pub restored: Vec<String>,
+    pub playing: Option<Option<NowPlaying>>,
+    pub notices: Vec<Notice>,
+    pub replies: Vec<(String, String)>,
 }
 
 /// A phone that exists only in memory.
@@ -91,6 +106,54 @@ impl Host for FakeHost {
     }
     fn show_alarms(&self) -> Result<(), HostError> {
         if self.0.lock().unwrap().clock_missing { Err(HostError::Unavailable) } else { Ok(()) }
+    }
+    fn keep(&self, key: &str, value: Option<&str>) {
+        let mut s = self.0.lock().unwrap();
+        match value {
+            Some(v) => s.settings.insert(key.to_string(), v.to_string()),
+            None => s.settings.remove(key),
+        };
+    }
+    fn device(&self, action: &DeviceAction) -> Result<DeviceResult, HostError> {
+        let mut s = self.0.lock().unwrap();
+        match s.device_mode.as_str() {
+            "denied" => return Err(HostError::Denied),
+            "failed" => return Err(HostError::Failed("refused".into())),
+            "missing" => return Err(HostError::Unavailable),
+            _ => {}
+        }
+        s.device.push(action.clone());
+        // a level the phone reports back: what was asked for, or a step of 10 from 50
+        let percent = match action {
+            DeviceAction::Volume { change, percent, .. } | DeviceAction::Brightness { change, percent } => match change {
+                LevelChange::Set => *percent,
+                LevelChange::Up => Some(60),
+                LevelChange::Down => Some(40),
+                LevelChange::Auto => None,
+            },
+            _ => None,
+        };
+        let restore = matches!(action, DeviceAction::Volume { .. } | DeviceAction::Brightness { .. } | DeviceAction::SoundMode { .. } | DeviceAction::DoNotDisturb { .. }).then(|| format!("r{}", s.device.len()));
+        Ok(DeviceResult { percent, restore })
+    }
+    fn restore(&self, token: &str) -> Result<(), HostError> {
+        self.0.lock().unwrap().restored.push(token.to_string());
+        Ok(())
+    }
+    fn now_playing(&self) -> Result<Option<NowPlaying>, HostError> {
+        self.0.lock().unwrap().playing.clone().ok_or(HostError::Unavailable)
+    }
+    fn notifications(&self, from: &str) -> Result<Vec<Notice>, HostError> {
+        let s = self.0.lock().unwrap();
+        if s.device_mode == "denied" {
+            return Err(HostError::Denied);
+        }
+        let from = from.to_lowercase();
+        Ok(s.notices.iter().filter(|n| from.is_empty() || n.app.to_lowercase().contains(&from) || n.title.to_lowercase().contains(&from)).cloned().collect())
+    }
+    fn reply_to(&self, key: &str, message: &str) -> Result<(), HostError> {
+        self.0.lock().unwrap().replies.push((key.to_string(), message.to_string()));
+        Ok(())
     }
     fn task_lists(&self) -> Result<Vec<ExternalList>, HostError> {
         let s = self.0.lock().unwrap();
@@ -195,6 +258,28 @@ pub fn run_spec(source: &str) -> (usize, Vec<Failure>) {
                 "tasks" => host.tasks_down = value == "down",
                 "clock" => host.clock_missing = value == "missing",
                 "alarms" => host.alarms_unconfirmed = value == "unconfirmed",
+                "device" => host.device_mode = value.to_string(),
+                "playing" => {
+                    host.playing = if value == "none" {
+                        None
+                    } else {
+                        match quoted(value) {
+                            Some((title, artist)) => Some(Some(NowPlaying { title, artist: artist.trim().to_string() })),
+                            None => Some(None),
+                        }
+                    }
+                }
+                "notice" => {
+                    let mut rest = value;
+                    let mut parts = Vec::new();
+                    while let Some((part, after)) = quoted(rest) {
+                        parts.push(part);
+                        rest = after;
+                    }
+                    let key = format!("n{}", host.notices.len() + 1);
+                    let get = |i: usize| parts.get(i).cloned().unwrap_or_default();
+                    host.notices.push(Notice { key, app: get(0), title: get(1), text: get(2), can_reply: rest.trim() == "reply" });
+                }
                 "item" => match quoted(value) {
                     Some((title, list)) => {
                         let n = session.store.all(None).len();
@@ -290,6 +375,26 @@ fn verify(check: &str, session: &Session, last: Option<&Reply>) -> Result<(), St
                 other => Err(format!("expected a {rest} reply, got {:?}: {:?}", other.map(|r| r.kind), other.map(|r| r.text.clone()))),
             }
         }
+        "device" => {
+            let last = host.device.last().map(|a| serde_json::to_string(a).unwrap_or_default()).unwrap_or_default();
+            last.contains(rest.trim()).then_some(()).ok_or(format!("the last change to the phone does not contain {rest}: {last:?}"))
+        }
+        "devices" => {
+            let n: usize = rest.trim().parse().map_err(|_| "devices needs a number")?;
+            (host.device.len() == n).then_some(()).ok_or(format!("expected {n} changes to the phone, found {:?}", host.device))
+        }
+        "restored" => {
+            let n: usize = rest.trim().parse().map_err(|_| "restored needs a number")?;
+            (host.restored.len() == n).then_some(()).ok_or(format!("expected {n} restored changes, found {:?}", host.restored))
+        }
+        "replied" => {
+            let (text, _) = quoted(rest).ok_or("a text in quotes is needed")?;
+            host.replies.iter().any(|(_, m)| *m == text).then_some(()).ok_or(format!("no reply {text:?}: {:?}", host.replies))
+        }
+        "kept" => {
+            let (absent, key) = match rest.trim().strip_prefix('!') { Some(k) => (true, k), None => (false, rest.trim()) };
+            (host.settings.contains_key(key) != absent).then_some(()).ok_or(format!("kept values: {:?}", host.settings))
+        }
         "alarms" => {
             let n: usize = rest.trim().parse().map_err(|_| "alarms needs a number")?;
             (host.alarms.len() == n).then_some(()).ok_or(format!("expected {n} alarms, found {}", host.alarms.len()))
@@ -349,8 +454,10 @@ fn verify(check: &str, session: &Session, last: Option<&Reply>) -> Result<(), St
             Ok(())
         }
         "alarm" => {
-            let want = millis(rest.trim(), &zone)?;
-            if host.alarms.iter().any(|a| a.at_ms == want) { Ok(()) } else { Err(format!("no alarm at {rest}: {:?}", host.alarms)) }
+            let mut parts = rest.split_whitespace();
+            let want = millis(parts.next().unwrap_or_default(), &zone)?;
+            let days: Option<Vec<u8>> = parts.next().and_then(|p| p.strip_prefix("days=")).map(|d| d.split(',').filter_map(|x| x.parse().ok()).collect());
+            if host.alarms.iter().any(|a| a.at_ms == want && days.as_ref().is_none_or(|d| *d == a.days)) { Ok(()) } else { Err(format!("no alarm at {rest}: {:?}", host.alarms)) }
         }
         "event" => {
             let (title, rest) = quoted(rest).ok_or("a title in quotes is needed")?;

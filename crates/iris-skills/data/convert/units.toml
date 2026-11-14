@@ -1,0 +1,34 @@
+# Units by id: what they measure and how they relate to the base unit of that dimension
+# (metre, gram, litre, metre per second, second, kelvin). value_in_base = value * scale + offset.
+# The words for them are in the language files.
+metre = { dimension = "length", scale = 1.0 }
+kilometre = { dimension = "length", scale = 1000.0 }
+centimetre = { dimension = "length", scale = 0.01 }
+millimetre = { dimension = "length", scale = 0.001 }
+mile = { dimension = "length", scale = 1609.344 }
+inch = { dimension = "length", scale = 0.0254 }
+foot = { dimension = "length", scale = 0.3048 }
+yard = { dimension = "length", scale = 0.9144 }
+nautical_mile = { dimension = "length", scale = 1852.0 }
+kilogram = { dimension = "mass", scale = 1000.0 }
+gram = { dimension = "mass", scale = 1.0 }
+milligram = { dimension = "mass", scale = 0.001 }
+pound = { dimension = "mass", scale = 453.59237 }
+pfund = { dimension = "mass", scale = 500.0 }
+ounce = { dimension = "mass", scale = 28.349523125 }
+tonne = { dimension = "mass", scale = 1000000.0 }
+litre = { dimension = "volume", scale = 1.0 }
+millilitre = { dimension = "volume", scale = 0.001 }
+gallon = { dimension = "volume", scale = 3.785411784 }
+cup = { dimension = "volume", scale = 0.2365882365 }
+kmh = { dimension = "speed", scale = 0.2777777777777778 }
+mph = { dimension = "speed", scale = 0.44704 }
+ms = { dimension = "speed", scale = 1.0 }
+knot = { dimension = "speed", scale = 0.5144444444444445 }
+second = { dimension = "time", scale = 1.0 }
+minute = { dimension = "time", scale = 60.0 }
+hour = { dimension = "time", scale = 3600.0 }
+day = { dimension = "time", scale = 86400.0 }
+celsius = { dimension = "temperature", scale = 1.0, offset = 273.15 }
+kelvin = { dimension = "temperature", scale = 1.0 }
+fahrenheit = { dimension = "temperature", scale = 0.5555555555555556, offset = 255.37222222222223 }

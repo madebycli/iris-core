@@ -19,6 +19,10 @@ pub enum Capability {
     Location,
     /// Setting and asking for alarms through the device's clock app.
     Alarm,
+    /// The phone's own settings (volume, brightness, sound mode), what is playing, and the web browser.
+    Device,
+    /// Reading notifications of other apps and answering them.
+    Notifications,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,6 +64,78 @@ pub struct AlarmRequest {
     pub at_ms: i64,
     pub hour: u8,
     pub minute: u8,
+    /// ISO weekdays (Monday = 1) the alarm repeats on; empty for a single alarm.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub days: Vec<u8>,
+}
+
+/// How a level (volume, brightness) should change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LevelChange {
+    Up,
+    Down,
+    /// To `percent`.
+    Set,
+    /// Brightness only: let the phone decide.
+    Auto,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SoundMode {
+    Ring,
+    Vibrate,
+    Silent,
+}
+
+/// A change to the phone itself.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum DeviceAction {
+    /// `ring`: the ringer, otherwise media.
+    Volume { ring: bool, change: LevelChange, percent: Option<u8> },
+    Brightness { change: LevelChange, percent: Option<u8> },
+    SoundMode { mode: SoundMode },
+    DoNotDisturb { on: bool },
+    /// Open a web search for `query` in the browser.
+    WebSearch { query: String },
+    /// Ask the clock app to dismiss the next alarm.
+    DismissAlarm,
+}
+
+/// What a [`DeviceAction`] did.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceResult {
+    /// The level the phone reports afterwards, for volume and brightness.
+    #[serde(default)]
+    pub percent: Option<u8>,
+    /// Hand this back to [`Host::restore`] to undo the change. `None`: it cannot be undone.
+    #[serde(default)]
+    pub restore: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NowPlaying {
+    pub title: String,
+    #[serde(default)]
+    pub artist: String,
+}
+
+/// A notification of another app.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Notice {
+    /// Names this notification for [`Host::reply_to`].
+    pub key: String,
+    /// The app's name.
+    pub app: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub text: String,
+    /// It offers a reply field.
+    #[serde(default)]
+    pub can_reply: bool,
 }
 
 pub trait Host: Send + Sync {
@@ -99,6 +175,29 @@ pub trait Host: Send + Sync {
     }
     /// Opens the clock app's list of alarms.
     fn show_alarms(&self) -> Result<(), HostError> {
+        Err(HostError::Unavailable)
+    }
+    /// Keeps a small value for later, also across restarts (read back with [`Host::setting`]). `None` removes it.
+    fn keep(&self, _key: &str, _value: Option<&str>) {}
+    /// Changes the phone. `Denied`: the permission is missing and the host has opened the screen to grant it;
+    /// `Failed`: Android did not apply it.
+    fn device(&self, _action: &DeviceAction) -> Result<DeviceResult, HostError> {
+        Err(HostError::Unavailable)
+    }
+    /// Undoes a [`DeviceAction`] with the token its result carried.
+    fn restore(&self, _token: &str) -> Result<(), HostError> {
+        Err(HostError::Unavailable)
+    }
+    /// What the active media player plays. `Ok(None)`: a player is there but names no title.
+    fn now_playing(&self) -> Result<Option<NowPlaying>, HostError> {
+        Err(HostError::Unavailable)
+    }
+    /// Notifications of other apps, newest first; `from` (may be empty) matches the app's name or the title.
+    fn notifications(&self, _from: &str) -> Result<Vec<Notice>, HostError> {
+        Err(HostError::Unavailable)
+    }
+    /// Answers the notification `key` with `message` through its reply field.
+    fn reply_to(&self, _key: &str, _message: &str) -> Result<(), HostError> {
         Err(HostError::Unavailable)
     }
 }

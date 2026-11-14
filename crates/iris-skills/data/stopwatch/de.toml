@@ -1,0 +1,25 @@
+[[pattern]]
+intent = "start"
+re = '^(?:start\w*|beginn\w*|aktivier\w*) (?:die |eine |meine )?stoppuhr$|^(?:die )?stoppuhr (?:starten|start|an|los|beginnen|einschalten)$'
+
+[[pattern]]
+intent = "stop"
+re = '^(?:stopp\w*|stop|halt\w*|pausier\w*|beend\w*|anhalten) (?:die |meine )?stoppuhr(?: an)?$|^(?:die )?stoppuhr (?:stoppen|stopp|stop|anhalten|aus|pausieren|beenden)$'
+
+[[pattern]]
+intent = "reset"
+re = '^(?:setz\w*|stell\w*) (?:die |meine )?stoppuhr (?:zurück|auf null)$|^(?:die )?stoppuhr (?:zurücksetzen|auf null(?: stellen)?|reset)$|^reset\w* (?:die )?stoppuhr$'
+
+[[pattern]]
+intent = "read"
+re = '^(?:(?:lies|zeig\w*|was sagt|was zeigt) (?:mir )?)?(?:die |meine )?stoppuhr(?: (?:ablesen|anzeigen|vor|an))?$|\bwie (?:lange|viel zeit)\b.*\bstoppuhr\b|\bstoppuhr\b.*\b(?:stand|zeit|zeigt)\b'
+
+[messages]
+running = "Stoppuhr: {time}, läuft."
+stopped = "Stoppuhr: {time}, angehalten."
+
+[training]
+start = ["starte die stoppuhr"]
+stop = ["stoppe die stoppuhr"]
+reset = ["setze die stoppuhr zurück"]
+read = ["wie lange läuft die stoppuhr"]

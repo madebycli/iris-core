@@ -7,9 +7,13 @@
 
 mod alarm;
 mod clock;
+mod convert;
+mod device;
+mod help;
 mod lists;
 mod notes;
 mod reminder;
+mod stopwatch;
 mod timer;
 
 use iris_core::{Engine, Host, Skill, SkillError, Store, Utterance};
@@ -17,14 +21,18 @@ use std::sync::Arc;
 
 pub use alarm::Alarm;
 pub use clock::Clock;
+pub use convert::{convert, Convert};
+pub use device::Device;
+pub use help::Help;
 pub use lists::Lists;
 pub use notes::Notes;
 pub use reminder::Reminder;
+pub use stopwatch::Stopwatch;
 pub use timer::Timer;
 
 /// Every built-in skill.
 pub fn all() -> Vec<Box<dyn Skill>> {
-    vec![Box::new(Reminder), Box::new(Lists), Box::new(Notes), Box::new(Timer), Box::new(Alarm), Box::new(Clock)]
+    vec![Box::new(Reminder), Box::new(Lists), Box::new(Notes), Box::new(Timer), Box::new(Alarm), Box::new(Clock), Box::new(Device), Box::new(Stopwatch), Box::new(Convert), Box::new(Help)]
 }
 
 /// An engine with all built-in skills registered.

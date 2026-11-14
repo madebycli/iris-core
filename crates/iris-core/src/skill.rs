@@ -138,6 +138,7 @@ pub struct Cx<'a> {
     pub state: serde_json::Value,
     pub(crate) ask: Option<(String, serde_json::Value)>,
     pub(crate) ids: &'a mut u64,
+    pub(crate) restore: Vec<String>,
 }
 
 impl Cx<'_> {
@@ -148,6 +149,11 @@ impl Cx<'_> {
 
     pub fn msg(&self, key: &str, args: &[(&str, &str)]) -> String {
         self.messages.get(key, args)
+    }
+
+    /// "Rückgängig" should also hand `token` back to [`Host::restore`] (a change to the phone, not to the store).
+    pub fn undoable(&mut self, token: String) {
+        self.restore.push(token);
     }
 
     /// A word list from the skill's language file; empty when the file has none of that name.

@@ -1,0 +1,34 @@
+id = "device"
+# above reminders and lists: these patterns are whole sentences about the phone itself
+priority = 25
+capabilities = ["device", "notifications"]
+
+[[intent]]
+id = "volume"
+
+[[intent]]
+id = "brightness"
+
+[[intent]]
+id = "sound_mode"
+
+[[intent]]
+id = "dnd"
+
+[[intent]]
+id = "web_search"
+
+[[intent]]
+id = "playing"
+
+[[intent]]
+id = "notifications"
+
+[[intent]]
+id = "reply"
+
+[[intent]]
+id = "reply.pick"
+
+[[intent]]
+id = "reply.confirm"

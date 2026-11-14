@@ -1,4 +1,8 @@
 [[pattern]]
+intent = "dismiss"
+re = '^(?:dismiss|stop|cancel|skip|turn off|disable) (?:the |my )?(?:next )?alarm$'
+
+[[pattern]]
 intent = "next"
 re = '\bwhen\b.*\b(?:next|goes off|rings)\b.*\balarm\b|\bnext alarm\b|\bwhen will i be woken\b'
 
@@ -18,6 +22,12 @@ time_unclear = "I cannot hand over that time unambiguously. What time should the
 no_clock = "No clock app that accepts alarms is installed. No alarm was requested."
 next = "Your next alarm rings {when}."
 none = "Android reports no alarm."
+dismiss_ask = "Should I ask the clock app to dismiss the next alarm?"
+dismissed = "I asked the clock app to dismiss the next alarm. Please check it there."
+repeating_when = "{repeat} at {time}"
+"repeat.daily" = "daily"
+"repeat.weekdays" = "on weekdays"
+"repeat.weekly" = "weekly"
 list_opened = "I opened the alarm list in the clock app. Android only shares the next alarm with me."
 
 [words]

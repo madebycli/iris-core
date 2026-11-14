@@ -1,4 +1,8 @@
 [[pattern]]
+intent = "dismiss"
+re = '^(?:verwirf|beende|stopp\w*|stop|deaktivier\w*|überspring\w*) (?:den |meinen )?(?:nächsten )?wecker(?: (?:aus|ab|weg))?$|^(?:schalt\w*|mach\w*|stell\w*) (?:den |meinen )?(?:nächsten )?wecker (?:aus|ab|weg)$|^(?:den )?(?:nächsten )?wecker (?:verwerfen|ausschalten|abschalten|überspringen|beenden|ausmachen|abstellen|deaktivieren)$'
+
+[[pattern]]
 intent = "next"
 re = '\bwann\b.*\b(?:nächste[rn]?|klingelt|weckt)\b.*\bwecker\b|\bnächste[rn]? wecker\b|\bwann (?:werde ich|wirst du mich) geweckt\b|\bwie lange noch bis zum wecker\b'
 
@@ -18,6 +22,12 @@ time_unclear = "Diese Zeit kann ich nicht eindeutig übergeben. Für wann soll d
 no_clock = "Es ist keine Uhr-App installiert, die Wecker annimmt. Es wurde kein Wecker angefordert."
 next = "Dein nächster Wecker klingelt {when}."
 none = "Android meldet keinen Wecker."
+dismiss_ask = "Soll ich die Uhr-App bitten, den nächsten Wecker zu verwerfen?"
+dismissed = "Ich habe die Uhr-App gebeten, den nächsten Wecker zu verwerfen. Prüfe es bitte dort."
+repeating_when = "{repeat} um {time}"
+"repeat.daily" = "täglich"
+"repeat.weekdays" = "werktags"
+"repeat.weekly" = "wöchentlich"
 list_opened = "Ich habe die Weckerliste in der Uhr-App geöffnet. Android gibt mir nur den nächsten Wecker frei."
 
 [words]

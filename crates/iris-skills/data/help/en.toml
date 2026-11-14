@@ -1,0 +1,10 @@
+[[pattern]]
+intent = "examples"
+re = '^(?:commands|(?:show|list|tell) (?:me )?(?:the |your |some )?commands|which commands (?:are there|do you know|do you understand))$'
+
+[words]
+examples = ["Remind me tomorrow at 8 am to water the plants", "Timer for 10 minutes", "Note the parcel number 12345", "Add milk to my shopping list", "Tick off milk", "Start the stopwatch", "Volume to 40 percent", "Five miles in kilometres"]
+
+[messages]
+intro = "For example:"
+outro = "Your entries are behind the list button at the top."

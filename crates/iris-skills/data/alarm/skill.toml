@@ -17,3 +17,9 @@ acts = ["alarm_list"]
 
 [[intent]]
 id = "set.time"
+
+[[intent]]
+id = "dismiss"
+
+[[intent]]
+id = "dismiss.confirm"
