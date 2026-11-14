@@ -32,7 +32,7 @@ impl Utterance {
             if orig.is_empty() {
                 continue;
             }
-            let norm = orig.to_lowercase().replace('’', "'");
+            let norm = lang.repair(&orig.to_lowercase().replace('’', "'"));
             if lang.dialog.fillers.contains(&norm) {
                 continue;
             }

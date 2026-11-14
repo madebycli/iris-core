@@ -8,7 +8,7 @@ re = '\bnotier\w*\b|\bnotiz(?:en)?\b|^schreib\w* das auf\b'
 
 [words]
 drop = ["schreib das auf", "schreibe das auf", "kannst du", "könntest du"]
-lead = ["notiere dir", "notier dir", "notiere", "notier", "notieren", "füge zu meinen notizen hinzu", "schreib in meine notizen", "schreibe in meine notizen", "leg eine notiz an", "lege eine notiz an", "mach eine notiz", "mache eine notiz", "erstelle eine notiz", "ich möchte eine notiz machen", "ich will etwas notieren", "ich möchte etwas notieren", "neue notiz", "eine notiz", "notiz", "dass", "mir", "dir", "hey", "und", "ja"]
+lead = ["eine kleine notiz erstellen", "kleine notiz erstellen", "eine kleine notiz", "kleine notiz", "notiz erstellen", "erstellen", "neue notiz", "und zwar", "zwar", "notiere dir", "notier dir", "notiere", "notier", "notieren", "füge zu meinen notizen hinzu", "schreib in meine notizen", "schreibe in meine notizen", "leg eine notiz an", "lege eine notiz an", "mach eine notiz", "mache eine notiz", "erstelle eine notiz", "ich möchte eine notiz machen", "ich will etwas notieren", "ich möchte etwas notieren", "neue notiz", "eine notiz", "notiz", "dass", "mir", "dir", "hey", "und", "ja"]
 trail = ["notieren", "als notiz", "in meine notizen"]
 placeholder = ["etwas", "was", "irgendwas"]
 

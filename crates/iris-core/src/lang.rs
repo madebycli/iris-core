@@ -12,6 +12,17 @@ pub struct LangPack {
     pub format: Format,
     #[serde(default)]
     pub messages: Messages,
+    /// Spelling the speech recogniser gets wrong, repaired word by word before anything is matched.
+    #[serde(default, rename = "repair")]
+    pub repairs: Vec<RepairSource>,
+    #[serde(skip)]
+    pub repair_rx: Vec<(regex::Regex, String)>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RepairSource {
+    pub re: String,
+    pub to: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -166,7 +177,17 @@ const EN: &str = include_str!("../../../lang/en.toml");
 
 impl LangPack {
     pub fn from_toml(source: &str) -> Result<Self, toml::de::Error> {
-        toml::from_str(source)
+        let mut pack: LangPack = toml::from_str(source)?;
+        for r in &pack.repairs {
+            let re = regex::Regex::new(&r.re).map_err(|e| <toml::de::Error as serde::de::Error>::custom(format!("repair {:?}: {e}", r.re)))?;
+            pack.repair_rx.push((re, r.to.clone()));
+        }
+        Ok(pack)
+    }
+
+    /// One normalised word with the language's repairs applied.
+    pub fn repair(&self, word: &str) -> String {
+        self.repair_rx.iter().fold(word.to_string(), |w, (re, to)| re.replace(&w, to.as_str()).into_owned())
     }
 
     /// The packs compiled into the engine. More can be added at run time with [`LangPack::from_toml`].

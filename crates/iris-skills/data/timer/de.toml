@@ -12,13 +12,15 @@ re = '\b(?:\w*timer|zeitgeber|countdown)\b'
 
 [words]
 # taken out of what is left after the duration; the rest is the timer's name
-noise = ["timer", "zeitgeber", "countdown", "stell", "stelle", "stellen", "setz", "setze", "mach", "mache", "starte", "start", "erstelle", "mir", "einen", "ein", "eine", "nen", "neuen", "auf", "für", "von", "mit", "den", "der", "die", "das", "namens", "und", "an", "ich", "brauche", "kannst", "du"]
+noise = ["bis", "um", "alt", "timer", "zeitgeber", "countdown", "stell", "stelle", "stellen", "setz", "setze", "mach", "mache", "starte", "start", "erstelle", "mir", "einen", "ein", "eine", "nen", "neuen", "auf", "für", "von", "mit", "den", "der", "die", "das", "namens", "und", "an", "ich", "brauche", "kannst", "du"]
 name_suffix = ["timer"]
 all = ["alle", "alles", "sämtliche", "beide"]
 
 [messages]
 set = "Timer für {duration} läuft."
 set_named = "{name}-Timer für {duration} läuft."
+set_until = "Timer bis {duration} läuft."
+set_until_named = "{name}-Timer bis {duration} läuft."
 ask_duration = "Wie lange soll der Timer laufen?"
 too_long = "Bitte wähle eine Dauer zwischen einer Sekunde und sieben Tagen."
 none = "Es läuft kein Timer."

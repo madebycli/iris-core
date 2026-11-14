@@ -31,6 +31,11 @@ impl Skill for Lists {
         match intent {
             "add" => Some(add(cx, None, false)),
             "more" => {
+                // "und erstelle einen Wecker …" is a new command, not one more entry
+                let rest = cx.span("rest");
+                if rest.len() > 9 || cx.utt.tokens.get(rest.start).is_some_and(|t| cx.list("sentence_start").contains(&t.norm)) {
+                    return None;
+                }
                 let list = cx.recall("list", RECENT_MS)?;
                 Some(add(cx, Some(list), false))
             }

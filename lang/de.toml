@@ -124,6 +124,15 @@ yes = ["ja", "jo", "jep", "klar", "genau", "mach das", "ja bitte", "okay", "ok",
 no = ["nein", "nö", "ne", "nicht", "lieber nicht", "falsch"]
 done = ["nein", "nö", "das war's", "das wars", "das war alles", "reicht", "das reicht", "fertig", "nichts mehr", "nichts", "danke", "nein danke", "passt"]
 
+# what the speech recogniser makes of common words
+[[repair]]
+re = '^(\p{L}*?)(?:less|lisste|lieste|lyste|liester|lise)$'
+to = '${1}liste'
+
+[[repair]]
+re = '^(?:hüge|huge|fuge|hüte)$'
+to = 'füge'
+
 [format]
 clock = "{h}:{mm} Uhr"
 date = "{d}.{m}."

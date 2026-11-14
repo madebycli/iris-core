@@ -46,10 +46,10 @@ einkaufen = "Einkauf"
 list = "Einkauf"
 
 [words]
-sentence_start = ["was", "wie", "wann", "wer", "wo", "welche", "warum", "zeig", "zeige", "lies", "kannst", "könntest", "stell", "stelle", "erinnere", "erinner", "lösche", "hake", "timer", "erstelle"]
+sentence_start = ["was", "wie", "wann", "wer", "wo", "welche", "warum", "zeig", "zeige", "lies", "kannst", "könntest", "stell", "stelle", "erinnere", "erinner", "lösche", "hake", "timer", "erstelle", "erstell", "mach", "mache", "starte", "öffne", "ruf", "spiel", "schalte", "sag", "such"]
 list_stop = ["meine", "meiner", "die", "der", "eine", "einer", "auf", "zur", "zu", "alle", "alles", "deine", "ab", "hinzu", "noch", "bitte", "setzen", "steht", "ist"]
 drop = ["hinzufügen", "hinzu", "dazu", "drauf", "vergiss nicht", "zu setzen", "zu schreiben", "kannst du", "könntest du", "ich bräuchte", "ich brauche", "ich brauch", "fehlt", "fehlen"]
-lead = ["füge", "füg", "setze", "setz", "schreibe", "schreib", "packe", "pack", "tu", "tue", "trage", "trag", "notiere", "notier", "mir", "ja", "und", "dann", "auch", "noch", "ich muss", "außerdem", "ok", "okay", "also"]
+lead = ["hinzufügen", "füge", "füg", "setze", "setz", "schreibe", "schreib", "packe", "pack", "tu", "tue", "trage", "trag", "notiere", "notier", "mir", "ja", "und", "dann", "auch", "noch", "ich muss", "außerdem", "ok", "okay", "also"]
 trail = ["ein", "auf", "noch", "setzen", "rauf", "drauf"]
 separators = ["und", "sowie", "plus"]
 placeholder = ["die", "das", "den", "es", "sie", "ihn", "etwas", "was", "irgendwas", "irgendetwas", "eintrag", "einen eintrag", "ein eintrag", "neuen eintrag", "einen neuen eintrag", "punkt", "einen punkt"]

@@ -269,3 +269,11 @@
 ## passive
 > Ich möchte um 19 Uhr an das Training erinnert werden
 = reminder "Training" 2026-11-10T19:00
+
+## a trailing "kann" is not part of the title (from the phone log)
+> Erstell mir eine Erinnerung, dass ich morgen den Hund rausbringen kann
+= reminder "Hund rausbringen" 2026-11-11T09:00
+
+## a stray "um" before a relative time (from the phone log)
+> Erinnern mich um in 10 Minuten daran, den Wecker auszumachen
+= reminder "Wecker ausmachen" 2026-11-10T16:10

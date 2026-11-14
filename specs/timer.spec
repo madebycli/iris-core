@@ -83,3 +83,13 @@
 @lang en
 > Set a pasta timer for 8 minutes
 = timer "Pasta" 480s
+
+## a clock time for a timer is a timer until then (from the phone log)
+> Erstelle mir ein Timer für 16.30 Uhr morgen
+< 16:30
+= timer "Timer" 2026-11-11T16:30
+= count timer 1
+
+## the clock time is not the name
+> Stelle einen Timer für Nudeln bis 17 Uhr
+= timer "Nudeln" 2026-11-10T17:00

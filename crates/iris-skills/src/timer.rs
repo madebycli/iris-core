@@ -1,6 +1,6 @@
 //! Timers: set, ask how long is left, cancel. Several can run at once, each with a name.
 
-use iris_core::time::{describe_duration, scan_duration};
+use iris_core::time::{describe, describe_duration, resolve, scan, scan_duration, HalfDay};
 use iris_core::{Card, Cx, Entry, EntryKind, Reply, Skill};
 use serde_json::json;
 
@@ -41,6 +41,18 @@ fn running(cx: &Cx) -> Vec<Entry> {
 fn set(cx: &mut Cx, answering: Option<String>) -> Option<Reply> {
     let norms = cx.utt.norms();
     let mut found = scan_duration(&norms, cx.lang);
+    let mut until = None;
+    if found.is_none() {
+        // "für 16:30 Uhr morgen": a clock time makes a timer that runs until then
+        let times = scan(&norms, cx.lang);
+        if times.expr.clock.is_some() || times.expr.day.is_some() {
+            if let Ok(at) = resolve(&times.expr, &cx.now, HalfDay::Nearest) {
+                let secs = (at.at.as_second() - cx.now.timestamp().as_second()).max(1);
+                found = Some((secs, times.used));
+                until = Some(at.at);
+            }
+        }
+    }
     if found.is_none() && answering.is_some() && norms.len() == 1 {
         // "ten" as an answer means minutes
         found = cx.lang.number(norms[0]).map(|n| (n * 60, vec![true]));
@@ -61,8 +73,17 @@ fn set(cx: &mut Cx, answering: Option<String>) -> Option<Reply> {
     entry.duration_ms = secs * 1000;
     cx.store.put(entry.clone());
     let _ = cx.host.schedule(&entry);
-    let duration = describe_duration(secs, cx.lang);
-    let text = if name.is_empty() { cx.msg("set", &[("duration", &duration)]) } else { cx.msg("set_named", &[("name", &name), ("duration", &duration)]) };
+    let duration = match until {
+        Some(at) => describe(at, &cx.now, cx.lang, false),
+        None => describe_duration(secs, cx.lang),
+    };
+    let key = match (until.is_some(), name.is_empty()) {
+        (false, true) => "set",
+        (false, false) => "set_named",
+        (true, true) => "set_until",
+        (true, false) => "set_until_named",
+    };
+    let text = cx.msg(key, &[("name", &name), ("duration", &duration)]);
     Some(Reply::done(text).with_card(Card::Timer { entry }))
 }
 
@@ -71,7 +92,7 @@ fn name_in(cx: &Cx, used: &[bool]) -> String {
     let (noise, suffixes) = (cx.list("noise"), cx.list("name_suffix"));
     let mut parts = Vec::new();
     for (i, token) in cx.utt.tokens.iter().enumerate() {
-        if used[i] || cx.lang.number(&token.norm).is_some() {
+        if used[i] || cx.lang.number(&token.norm).is_some() || token.norm.chars().any(|c| c.is_ascii_digit()) {
             continue;
         }
         // "Nudeltimer" names the timer in one word

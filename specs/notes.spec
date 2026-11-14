@@ -90,3 +90,11 @@
 = note "Buy milk"
 > Show my notes
 < Buy milk
+
+## a spoken preamble is not part of the note (from the phone log)
+> Eine kleine Notiz erstellen bitte, und zwar morgen ist der Hund erst um 16.30 Uhr wieder zu Hause
+= note "Morgen ist der Hund erst um 16.30 Uhr wieder zu Hause"
+
+## "Neue Notiz und zwar …"
+> Neue Notiz und zwar Baumverkauf ist um 16.30 Uhr
+= note "Baumverkauf ist um 16.30 Uhr"

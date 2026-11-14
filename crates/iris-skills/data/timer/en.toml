@@ -11,13 +11,15 @@ intent = "set"
 re = '\b(?:timers?|countdown)\b'
 
 [words]
-noise = ["timer", "countdown", "set", "start", "make", "create", "me", "a", "an", "the", "new", "for", "to", "of", "with", "named", "called", "and", "i", "need", "can", "you"]
+noise = ["until", "at", "timer", "countdown", "set", "start", "make", "create", "me", "a", "an", "the", "new", "for", "to", "of", "with", "named", "called", "and", "i", "need", "can", "you"]
 name_suffix = []
 all = ["all", "every", "both", "everything"]
 
 [messages]
 set = "Timer set for {duration}."
 set_named = "{name} timer set for {duration}."
+set_until = "Timer set until {duration}."
+set_until_named = "{name} timer set until {duration}."
 ask_duration = "How long should the timer run?"
 too_long = "Choose a duration between one second and seven days."
 none = "No timer is running."

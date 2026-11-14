@@ -161,6 +161,10 @@ impl Scanner<'_> {
     fn step(&mut self, i: usize) -> usize {
         let lang = self.lang;
         let w = &lang.time;
+        // "um in 10 Minuten", "um morgen": a clock marker with nothing to mark
+        if self.word(i, &w.clock_markers) && self.t.get(i + 1).is_some_and(|next| w.in_words.iter().any(|x| x == next) || w.day_offsets.contains_key(*next)) {
+            return self.mark(i, 1);
+        }
         // repetition
         for (list, rep) in [(&w.repeat.daily, Repeat::Daily), (&w.repeat.weekdays, Repeat::Weekdays), (&w.repeat.weekly, Repeat::Weekly)] {
             if let Some(n) = LangPack::phrase_at(self.t, i, list) {

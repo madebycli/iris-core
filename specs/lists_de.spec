@@ -293,3 +293,20 @@
 > Erinnere mich um 17 Uhr an Oma
 > Lösche alle Erinnerungen
 < Erinnerung
+
+## a command that starts with "und" is not an entry (from the phone log)
+> Füge Döner zu meiner Einkaufsliste hinzu
+> Und erstelle einen Wecker in 10 Minuten
+= count item 1
+= kind unhandled
+
+## a speech-recognition slip in the list word (from the phone log)
+> Hüge Döner zu meiner Einkaufsless hinzu
+= item "Döner" list=Einkauf
+
+## "und" continues the list with plain words
+> Füge Döner zu meiner Einkaufsliste hinzu
+> Und Fortnite Skins
+> Und Brawl Stars Robots
+= item "Fortnite Skins" list=Einkauf
+= item "Brawl Stars Robots" list=Einkauf
