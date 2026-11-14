@@ -196,7 +196,6 @@ pub fn run_spec(source: &str) -> (usize, Vec<Failure>) {
                 "alarms" => host.alarms_unconfirmed = value == "unconfirmed",
                 "item" => match quoted(value) {
                     Some((title, list)) => {
-                        use iris_core::Store;
                         let n = session.store.all(None).len();
                         let mut entry = Entry::new(format!("seed-{n}"), EntryKind::ListItem, title, host.now_ms, &host.zone);
                         entry.collection = list.to_string();
@@ -205,7 +204,6 @@ pub fn run_spec(source: &str) -> (usize, Vec<Failure>) {
                     None => fail(format!("bad @item {value:?}")),
                 },
                 "fire" => {
-                    use iris_core::Store;
                     drop(host);
                     if let Some(id) = session.store.all(None).into_iter().find(|e| e.title == value).map(|e| e.id) {
                         session.engine.fired(&id);
@@ -264,7 +262,6 @@ fn kind_of(word: &str) -> Option<EntryKind> {
 }
 
 fn verify(check: &str, session: &Session, last: Option<&Reply>) -> Result<(), String> {
-    use iris_core::Store;
     let (word, rest) = check.split_once(' ').unwrap_or((check, ""));
     let host = session.host.0.lock().unwrap();
     let zone = host.zone.clone();

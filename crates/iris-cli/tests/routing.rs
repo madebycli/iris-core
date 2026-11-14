@@ -1,7 +1,7 @@
 //! The pipeline's tiers, with a stand-in for the trained network.
 
 use iris_cli::Session;
-use iris_core::{Classifier, EntryKind, Prediction, ReplyKind, Store};
+use iris_core::{Classifier, EntryKind, Prediction, ReplyKind};
 
 struct Says(&'static str, f32);
 
