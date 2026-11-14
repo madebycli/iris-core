@@ -20,3 +20,6 @@ id = "set.duration"
 
 [[intent]]
 id = "cancel.which"
+
+[[intent]]
+id = "set.name"

@@ -1,4 +1,8 @@
 [[pattern]]
+intent = "remove"
+re = '\b(?:delete|remove|clear)\b.*\bnotes?\b'
+
+[[pattern]]
 intent = "read"
 re = '\b(?:show|read|see|what are|which)\b.*\bnotes?\b'
 
@@ -11,8 +15,17 @@ drop = ["write this down", "write that down", "can you", "could you"]
 lead = ["take a note", "make a note", "add a note", "create a note", "new note", "note down", "note that", "note", "a note", "that", "of", "to", "my notes", "add to my notes", "and"]
 trail = ["as a note", "to my notes"]
 placeholder = ["something"]
+all = ["all", "every"]
 
 [messages]
+removed = "The note “{title}” is deleted."
+ask_which = "Which note should I delete?"
+"confirm_all.one" = "Really delete your note?"
+"confirm_all.other" = "Really delete all {n} notes?"
+"deleted_all.one" = "Note deleted."
+"deleted_all.other" = "{n} notes deleted."
+kept = "Okay, they stay."
+not_found = "I did not find that note."
 added = "Noted: “{text}”."
 ask_text = "What should I note?"
 none = "You have no notes."

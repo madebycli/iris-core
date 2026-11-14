@@ -7,6 +7,10 @@ intent = "check_all"
 re = '\b(?:check|tick|cross)\b.*\b(?:everything|all)\b.*\boff\b'
 
 [[pattern]]
+intent = "read_all"
+re = '\b(?:my|all|which) lists\b|\bshow\w* (?:me )?(?:my )?lists\b'
+
+[[pattern]]
 intent = "clear"
 re = '\b(?:delete|clear|remove|empty)\b.*\b(?:everything|all)\b|\b(?:clear|empty)\b.*\blist\b'
 
@@ -62,6 +66,8 @@ today = ["today", "from today", "today's"]
 verbs = ["delete", "remove", "take", "check", "tick", "cross", "off", "is done", "are done", "from", "the", "my"]
 
 [messages]
+card_title = "Lists"
+read_all_line = "{list}: {items}."
 "added.one" = "{items} is on the {list} list."
 "added.other" = "{items} are on the {list} list."
 already = "{items} is already on the {list} list."

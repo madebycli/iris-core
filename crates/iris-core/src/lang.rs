@@ -17,6 +17,11 @@ pub struct LangPack {
     pub repairs: Vec<RepairSource>,
     #[serde(skip)]
     pub repair_rx: Vec<(regex::Regex, String)>,
+    /// Rewrites of the whole text before it is split into words ("einkaufs liste" is one word).
+    #[serde(default, rename = "normalize")]
+    pub normalizers: Vec<RepairSource>,
+    #[serde(skip)]
+    pub normalize_rx: Vec<(regex::Regex, String)>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -115,6 +120,9 @@ pub struct DialogWords {
     pub cancel: Vec<String>,
     #[serde(default)]
     pub undo: Vec<String>,
+    /// Small words around a cancel word that do not change its meaning: "nein, abbrechen", "ok stopp".
+    #[serde(default)]
+    pub soft: Vec<String>,
     /// "Say that again": the last answer, read once more.
     #[serde(default)]
     pub say_again: Vec<String>,
@@ -133,6 +141,34 @@ impl DialogWords {
     pub fn is_cancel(&self, text: &str) -> bool {
         Self::is(&self.cancel, text)
     }
+    /// Whether the words are a way of backing out: a cancel phrase, or several of them in a row ("stopp vergiss es"),
+    /// with soft words ("nein", "ok") allowed around them.
+    pub fn cancels(&self, words: &[String]) -> bool {
+        fn covered(phrases: &[Vec<&str>], w: &[&str]) -> bool {
+            if w.is_empty() {
+                return true;
+            }
+            phrases.iter().any(|p| w.len() >= p.len() && w[..p.len()] == p[..] && covered(phrases, &w[p.len()..]))
+        }
+        let phrases: Vec<Vec<&str>> = self.cancel.iter().map(|c| c.split(' ').collect()).collect();
+        let mut w: Vec<&str> = words.iter().map(String::as_str).collect();
+        if !w.is_empty() && covered(&phrases, &w) {
+            return true;
+        }
+        while w.first().is_some_and(|x| self.soft.iter().any(|s| s == x)) {
+            w.remove(0);
+        }
+        while w.last().is_some_and(|x| self.soft.iter().any(|s| s == x)) {
+            w.pop();
+        }
+        !w.is_empty() && covered(&phrases, &w)
+    }
+
+    /// Whether the words are only a "no" ("nein", "nee").
+    pub fn only_no(&self, words: &[String]) -> bool {
+        !words.is_empty() && words.iter().all(|w| self.no.iter().any(|n| n == w))
+    }
+
     pub fn is_say_again(&self, text: &str) -> bool {
         Self::is(&self.say_again, text)
     }
@@ -196,11 +232,20 @@ const EN: &str = include_str!("../../../lang/en.toml");
 impl LangPack {
     pub fn from_toml(source: &str) -> Result<Self, toml::de::Error> {
         let mut pack: LangPack = toml::from_str(source)?;
+        for r in &pack.normalizers {
+            let re = regex::Regex::new(&r.re).map_err(|e| <toml::de::Error as serde::de::Error>::custom(format!("normalize {:?}: {e}", r.re)))?;
+            pack.normalize_rx.push((re, r.to.clone()));
+        }
         for r in &pack.repairs {
             let re = regex::Regex::new(&r.re).map_err(|e| <toml::de::Error as serde::de::Error>::custom(format!("repair {:?}: {e}", r.re)))?;
             pack.repair_rx.push((re, r.to.clone()));
         }
         Ok(pack)
+    }
+
+    /// The text with the language's whole-text rewrites applied.
+    pub fn normalize(&self, text: &str) -> String {
+        self.normalize_rx.iter().fold(text.to_string(), |t, (re, to)| re.replace_all(&t, to.as_str()).into_owned())
     }
 
     /// One normalised word with the language's repairs applied.

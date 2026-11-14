@@ -11,3 +11,12 @@ acts = ["note_read"]
 
 [[intent]]
 id = "add.text"
+
+[[intent]]
+id = "remove"
+
+[[intent]]
+id = "remove.which"
+
+[[intent]]
+id = "clear.confirm"

@@ -43,9 +43,47 @@ impl Skill for Notes {
                 let titles = items.iter().map(|e| e.title.clone()).collect::<Vec<_>>().join(", ");
                 Some(Reply::done(cx.messages.plural("read", items.len() as i64, &[("items", &titles)])).with_card(Card::Entries { title: cx.msg("card_title", &[]), items }))
             }
+            "remove" | "remove.which" => Some(remove(cx, intent == "remove.which")),
+            "clear.confirm" => Some(clear_confirmed(cx)),
             _ => None,
         }
     }
+}
+
+fn remove(cx: &mut Cx, answering: bool) -> Reply {
+    let notes = cx.store.all(Some(EntryKind::Note));
+    if notes.is_empty() {
+        return Reply::done(cx.msg("none", &[]));
+    }
+    let said = cx.utt.norm.clone();
+    if cx.utt.tokens.iter().any(|t| cx.list("all").contains(&t.norm)) {
+        cx.ask("clear.confirm", json!({}));
+        return Reply::question(cx.messages.plural("confirm_all", notes.len() as i64, &[]));
+    }
+    // the longest note whose words are in the sentence
+    let hit = notes.iter().filter(|n| said.contains(&n.title.to_lowercase())).max_by_key(|n| n.title.len()).cloned();
+    match hit {
+        Some(note) => {
+            cx.store.delete(&note.id);
+            Reply::done(cx.msg("removed", &[("title", &note.title)]))
+        }
+        None if answering => Reply::failed(cx.msg("not_found", &[])),
+        None => {
+            cx.ask("remove.which", json!({}));
+            Reply::question(cx.msg("ask_which", &[])).with_card(Card::Entries { title: cx.msg("card_title", &[]), items: notes })
+        }
+    }
+}
+
+fn clear_confirmed(cx: &mut Cx) -> Reply {
+    if !cx.lang.dialog.is_yes(&cx.utt.norm) {
+        return Reply::done(cx.msg("kept", &[]));
+    }
+    let notes = cx.store.all(Some(EntryKind::Note));
+    for n in &notes {
+        cx.store.delete(&n.id);
+    }
+    Reply::done(cx.messages.plural("deleted_all", notes.len() as i64, &[]))
 }
 
 fn save(cx: &mut Cx, text: String) -> Reply {

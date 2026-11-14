@@ -118,8 +118,9 @@ weekdays = ["werktags", "an werktagen", "unter der woche"]
 weekly = ["wöchentlich", "jede woche"]
 
 [dialog]
-fillers = ["bitte", "mal", "ähm", "äh", "hm", "doch", "eben", "halt", "iris"]
-cancel = ["abbrechen", "abbruch", "stopp", "stop", "vergiss es", "lass gut sein", "nein danke", "doch nicht", "brich ab", "egal", "schon gut", "lass es"]
+fillers = ["bitte", "mal", "ähm", "äh", "hm", "doch", "eben", "halt", "iris", "hey", "hallo", "hi"]
+cancel = ["abbrechen", "abbruch", "stopp", "stop", "halt", "vergiss es", "vergiss das", "lass das", "lass mal", "lass es", "lass gut sein", "schon gut", "egal", "nein danke", "doch nicht", "brich ab", "das reicht", "reicht", "genug", "cancel", "never mind", "nevermind"]
+soft = ["nein", "nee", "nö", "ne", "ok", "okay", "also", "dann", "bitte", "jetzt", "na", "ja"]
 say_again = ["sag das nochmal", "sag das noch mal", "sag es nochmal", "wie bitte", "was hast du gesagt", "noch mal bitte", "nochmal bitte"]
 repeat = ["wiederhole das", "wiederhole es", "mach das nochmal", "mach das noch mal", "noch einmal", "nochmal", "das gleiche nochmal"]
 undo = ["rückgängig", "mach das rückgängig", "mach es rückgängig", "mach rückgängig", "das rückgängig machen", "nimm das zurück", "nimm es zurück", "widerrufe das", "zurücknehmen"]
@@ -135,6 +136,19 @@ to = '${1}liste'
 [[repair]]
 re = '^(?:hüge|huge|fuge|hüte)$'
 to = 'füge'
+
+[[normalize]]
+# the list's name said as two words: "Einkaufs Liste"
+re = '(?i)\b(einkaufs|spiele|spiel|arbeits|wunsch|pack|kleidungs|kleidung|haushalts|geschenk|geschenke|schul|todo|to do) (liste|zettel)\b'
+to = '${1}${2}'
+
+[[repair]]
+re = '^(?:fuege|fuge|füge|fuegen)$'
+to = 'füge'
+
+[[repair]]
+re = '^setzt$'
+to = 'setze'
 
 [format]
 clock = "{h}:{mm} Uhr"

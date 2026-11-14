@@ -31,11 +31,14 @@
 < Wie lange
 = kind question
 > 10 Minuten
+< heißen
+> Nein
 = timer "Timer" 600s
 
 ## guided, a bare number is minutes
 > Timer
 > fünf
+> ohne Namen
 = timer "Timer" 300s
 
 ## cancel in the middle

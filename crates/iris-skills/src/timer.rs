@@ -26,6 +26,12 @@ impl Skill for Timer {
                 let name = cx.state["name"].as_str().unwrap_or_default().to_string();
                 set(cx, Some(name))
             }
+            "set.name" => {
+                let secs = cx.state["secs"].as_i64().unwrap_or(0);
+                let said = cx.utt.norm.clone();
+                let name = if cx.list("no_name").contains(&said) { String::new() } else { name_in(cx, &vec![false; cx.utt.len()]) };
+                Some(start(cx, secs, name, None))
+            }
             "query" => Some(query(cx)),
             "cancel" | "cancel.which" => Some(cancel(cx, intent == "cancel.which")),
             _ => None,
@@ -66,6 +72,16 @@ fn set(cx: &mut Cx, answering: Option<String>) -> Option<Reply> {
     if !(1..=604_800).contains(&secs) {
         return Some(Reply::failed(cx.msg("too_long", &[])));
     }
+    // asked for step by step ("Erstelle einen Timer" … "zehn Minuten"): the name is asked too
+    if answering.as_ref().is_some_and(|n| n.is_empty()) && until.is_none() {
+        cx.ask("set.name", json!({ "secs": secs }));
+        return Some(Reply::question(cx.msg("ask_name", &[])));
+    }
+    Some(start(cx, secs, name, until))
+}
+
+/// Starts the timer and says so.
+fn start(cx: &mut Cx, secs: i64, name: String, until: Option<jiff::Timestamp>) -> Reply {
     let now = cx.now_ms();
     let title = if name.is_empty() { cx.msg("default_name", &[]) } else { name.clone() };
     let mut entry = Entry::new(cx.new_id(), EntryKind::Timer, title, now, &cx.host.zone());
@@ -84,7 +100,7 @@ fn set(cx: &mut Cx, answering: Option<String>) -> Option<Reply> {
         (true, false) => "set_until_named",
     };
     let text = cx.msg(key, &[("name", &name), ("duration", &duration)]);
-    Some(Reply::done(text).with_card(Card::Timer { entry }))
+    Reply::done(text).with_card(Card::Timer { entry })
 }
 
 /// What is left of the sentence once the duration and the skill's own words are gone: the timer's name.

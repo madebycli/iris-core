@@ -13,6 +13,7 @@ re = '\b(?:timers?|countdown)\b'
 [words]
 noise = ["until", "at", "timer", "countdown", "set", "start", "make", "create", "me", "a", "an", "the", "new", "for", "to", "of", "with", "named", "called", "and", "i", "need", "can", "you"]
 name_suffix = []
+no_name = ["no", "nothing", "no name", "none", "skip", "whatever", "without a name"]
 all = ["all", "every", "both", "everything"]
 
 [messages]
@@ -20,6 +21,7 @@ set = "Timer set for {duration}."
 set_named = "{name} timer set for {duration}."
 set_until = "Timer set until {duration}."
 set_until_named = "{name} timer set until {duration}."
+ask_name = "What should the timer be called?"
 ask_duration = "How long should the timer run?"
 too_long = "Choose a duration between one second and seven days."
 none = "No timer is running."

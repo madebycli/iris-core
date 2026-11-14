@@ -7,6 +7,18 @@ intent = "check_all"
 re = '\bha[ck]\w*\b.*\b(?:alles|alle)\b.*\bab$|\balles?\b.*\babhaken$'
 
 [[pattern]]
+intent = "check_all"
+re = '\bha[ck]\w*\b.*\b\p{L}*(?:liste|zettel)\b.*\bab$'
+
+[[pattern]]
+intent = "clear"
+re = '^(?:lösch\w*|leer\w*|entfern\w*|räum\w*) (?:die |meine |den |alles auf (?:der|meiner) )?\p{L}*(?:liste|zettel)(?: \p{L}+)?$|^alles (?:von|auf|aus) (?:der|meiner|meinen) \p{L}*(?:liste|zettel) (?:löschen|entfernen|leeren)$'
+
+[[pattern]]
+intent = "read_all"
+re = '\b(?:meine|alle|welche) listen\b|\bzeig\w* (?:mir )?(?:meine )?listen\b'
+
+[[pattern]]
 intent = "clear"
 re = '\b(?:lösch\w*|leer\w*|entfern\w*|räum\w*)\b.*\b(?:alles|alle|komplett)\b|\bleer\w*\b.*\b\p{L}*liste\b'
 
@@ -16,7 +28,7 @@ re = '\bha[ck]\w*\b.*\bab$|\babhaken$|\bist erledigt$|\bsind erledigt$'
 
 [[pattern]]
 intent = "remove"
-re = '\b(?:lösch\w*|streich\w*|entfern\w*|nimm)\b'
+re = '\b(?:lösch\w*|streich\w*|entfern\w*)\b|\bnimm\b.*\b(?:von|aus|runter|weg)\b'
 
 [[pattern]]
 intent = "read"
@@ -54,11 +66,11 @@ list = "Einkauf"
 [words]
 sentence_start = ["was", "wie", "wann", "wer", "wo", "welche", "warum", "zeig", "zeige", "lies", "kannst", "könntest", "stell", "stelle", "erinnere", "erinner", "lösche", "hake", "timer", "erstelle", "erstell", "mach", "mache", "starte", "öffne", "ruf", "spiel", "schalte", "sag", "such"]
 list_stop = ["meine", "meiner", "die", "der", "eine", "einer", "auf", "zur", "zu", "alle", "alles", "deine", "ab", "hinzu", "noch", "bitte", "setzen", "steht", "ist"]
-drop = ["hinzufügen", "hinzu", "dazu", "drauf", "vergiss nicht", "zu setzen", "zu schreiben", "kannst du", "könntest du", "ich bräuchte", "ich brauche", "ich brauch", "fehlt", "fehlen"]
-lead = ["hinzufügen", "füge", "füg", "setze", "setz", "schreibe", "schreib", "packe", "pack", "tu", "tue", "trage", "trag", "notiere", "notier", "mir", "ja", "und", "dann", "auch", "noch", "ich muss", "außerdem", "ok", "okay", "also"]
+drop = ["hin zu", "hinzufügen", "hinzu", "dazu", "drauf", "vergiss nicht", "zu setzen", "zu schreiben", "kannst du", "könntest du", "ich bräuchte", "ich brauche", "ich brauch", "fehlt", "fehlen"]
+lead = ["ich möchte gerne", "ich möchte", "ich will", "gerne", "gern", "nimm", "hinzufügen", "füge", "füg", "setze", "setz", "schreibe", "schreib", "packe", "pack", "tu", "tue", "trage", "trag", "notiere", "notier", "mir", "ja", "und", "dann", "auch", "noch", "ich muss", "außerdem", "ok", "okay", "also"]
 trail = ["ein", "auf", "noch", "setzen", "rauf", "drauf"]
 separators = ["und", "sowie", "plus"]
-placeholder = ["die", "das", "den", "es", "sie", "ihn", "etwas", "was", "irgendwas", "irgendetwas", "eintrag", "einen eintrag", "ein eintrag", "neuen eintrag", "einen neuen eintrag", "punkt", "einen punkt"]
+placeholder = ["danke", "dankeschön", "vielen dank", "bitte", "die", "das", "den", "es", "sie", "ihn", "etwas", "was", "irgendwas", "irgendetwas", "eintrag", "einen eintrag", "ein eintrag", "neuen eintrag", "einen neuen eintrag", "punkt", "einen punkt"]
 entry_words = ["eintrag", "einträge", "einträgen", "liste", "punkt", "punkte"]
 all = ["alle", "alles", "komplett", "sämtliche"]
 today = ["heute", "von heute", "heutigen"]
@@ -66,6 +78,8 @@ today = ["heute", "von heute", "heutigen"]
 verbs = ["lösche", "lösch", "streich", "streiche", "entferne", "entfern", "nimm", "hake", "hak", "hacke", "hack", "ab", "abhaken", "ist erledigt", "sind erledigt", "von", "der", "die", "das", "den"]
 
 [messages]
+card_title = "Listen"
+read_all_line = "{list}: {items}."
 "added.one" = "{items} steht auf der Liste {list}."
 "added.other" = "{items} stehen auf der Liste {list}."
 already = "{items} steht schon auf der Liste {list}."

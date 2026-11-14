@@ -49,6 +49,7 @@ impl Skill for Reminder {
                 Some(shift(cx, id, TimeExpr::default(), true))
             }
             "snooze" => snooze(cx),
+            "today" => Some(today(cx)),
             "list" => Some(list(cx)),
             "delete" => Some(delete(cx, false)),
             "delete.which" => Some(delete(cx, true)),
@@ -298,4 +299,36 @@ fn snooze(cx: &mut Cx) -> Option<Reply> {
     let _ = cx.host.schedule(&again);
     let duration = iris_core::time::describe_duration(secs, cx.lang);
     Some(Reply::done(cx.msg("snoozed", &[("title", &again.title), ("duration", &duration)])))
+}
+
+/// "Was muss ich heute tun?": today's reminders and how much is still open on the lists.
+fn today(cx: &mut Cx) -> Reply {
+    let tz = cx.now.time_zone().clone();
+    let day = cx.now.date();
+    let mut due: Vec<Entry> = open(cx).into_iter().filter(|e| e.due_at.and_then(|d| jiff::Timestamp::from_millisecond(d).ok()).is_some_and(|t| t.to_zoned(tz.clone()).date() == day)).collect();
+    due.sort_by_key(|e| e.due_at);
+    let open_items = cx.store.all(Some(EntryKind::ListItem)).into_iter().filter(|e| e.pending).count();
+    if due.is_empty() && open_items == 0 {
+        return Reply::done(cx.msg("nothing_today", &[]));
+    }
+    let mut said = String::new();
+    if !due.is_empty() {
+        let lines: Vec<String> = due
+            .iter()
+            .map(|e| {
+                let z = jiff::Timestamp::from_millisecond(e.due_at.unwrap_or(0)).unwrap_or(jiff::Timestamp::UNIX_EPOCH).to_zoned(tz.clone());
+                let time = cx.lang.format.clock.replace("{h}", &z.hour().to_string()).replace("{mm}", &format!("{:02}", z.minute()));
+                cx.msg("today_at", &[("title", &e.title), ("time", &time)])
+            })
+            .collect();
+        said = cx.msg("today_reminders", &[("items", &lines.join(", "))]);
+    }
+    if open_items > 0 {
+        if !said.is_empty() {
+            said.push(' ');
+        }
+        said.push_str(&cx.messages.plural("today_open", open_items as i64, &[]));
+    }
+    let reply = Reply::done(said);
+    if due.is_empty() { reply } else { reply.with_card(Card::Entries { title: cx.msg("card_title", &[]), items: due }) }
 }

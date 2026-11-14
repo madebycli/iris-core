@@ -1,18 +1,31 @@
 [[pattern]]
+intent = "remove"
+re = '\b(?:lösch\w*|entfern\w*|streich\w*)\b.*\bnotiz(?:en)?\b'
+
+[[pattern]]
 intent = "read"
-re = '\b(?:zeig\w*|lies|lese|sehen|welche|was habe ich|was hab ich)\b.*\bnotiz(?:en)?\b|\bnotiz(?:en)?\b.*\b(?:sehen|vor|anzeigen)$|\bwas ich notiert habe\b'
+re = '\bwas (?:steht|habe ich|hab ich|ist)\b.*\bnotiz|\bwas (?:ich )?(?:habe )?(?:ich )?mir notiert\b|\bnotiert habe\b|\b\b(?:zeig\w*|lies|lese|sehen|welche|was habe ich|was hab ich)\b.*\bnotiz(?:en)?\b|\bnotiz(?:en)?\b.*\b(?:sehen|vor|anzeigen)$|\bwas ich notiert habe\b'
 
 [[pattern]]
 intent = "add"
-re = '\bnotier\w*\b|\bnotiz(?:en)?\b|^schreib\w* das auf\b'
+re = '\bnotier\w*\b|\bnotiz(?:en)?\b|^schreib\w* (?:das )?auf\b'
 
 [words]
-drop = ["schreib das auf", "schreibe das auf", "kannst du", "könntest du"]
-lead = ["eine kleine notiz erstellen", "kleine notiz erstellen", "eine kleine notiz", "kleine notiz", "notiz erstellen", "erstellen", "neue notiz", "und zwar", "zwar", "notiere dir", "notier dir", "notiere", "notier", "notieren", "füge zu meinen notizen hinzu", "schreib in meine notizen", "schreibe in meine notizen", "leg eine notiz an", "lege eine notiz an", "mach eine notiz", "mache eine notiz", "erstelle eine notiz", "ich möchte eine notiz machen", "ich will etwas notieren", "ich möchte etwas notieren", "neue notiz", "eine notiz", "notiz", "dass", "mir", "dir", "hey", "und", "ja"]
+drop = ["zu meinen notizen hinzu", "in meine notizen", "auf meine notizen", "zu meinen notizen", "meine notizen", "hinzufügen", "hinzu", "schreib das auf", "schreibe das auf", "kannst du", "könntest du"]
+lead = ["schreibe auf", "schreib auf", "mache eine neue notiz", "mach eine neue notiz", "speichere die notiz", "speicher die notiz", "eine neue notiz", "füge", "füg", "schreibe", "schreib", "setze", "setz", "speichere", "speicher", "mache", "mach", "eine kleine notiz erstellen", "kleine notiz erstellen", "eine kleine notiz", "kleine notiz", "notiz erstellen", "erstellen", "neue notiz", "und zwar", "zwar", "notiere dir", "notier dir", "notiere", "notier", "notieren", "füge zu meinen notizen hinzu", "schreib in meine notizen", "schreibe in meine notizen", "leg eine notiz an", "lege eine notiz an", "mach eine notiz", "mache eine notiz", "erstelle eine notiz", "ich möchte eine notiz machen", "ich will etwas notieren", "ich möchte etwas notieren", "neue notiz", "eine notiz", "notiz", "dass", "mir", "dir", "hey", "und", "ja"]
 trail = ["notieren", "als notiz", "in meine notizen"]
 placeholder = ["etwas", "was", "irgendwas"]
+all = ["alle", "alles", "sämtliche"]
 
 [messages]
+removed = "Die Notiz „{title}“ ist gelöscht."
+ask_which = "Welche Notiz soll ich löschen?"
+"confirm_all.one" = "Wirklich deine Notiz löschen?"
+"confirm_all.other" = "Wirklich alle {n} Notizen löschen?"
+"deleted_all.one" = "Notiz gelöscht."
+"deleted_all.other" = "{n} Notizen gelöscht."
+kept = "Okay, sie bleiben."
+not_found = "Diese Notiz habe ich nicht gefunden."
 added = "Notiert: „{text}“."
 ask_text = "Was soll ich notieren?"
 none = "Du hast keine Notizen."

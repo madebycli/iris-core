@@ -9,6 +9,9 @@ acts = ["list_add"]
 id = "buy"
 
 [[intent]]
+id = "read_all"
+
+[[intent]]
 id = "read"
 acts = ["list_read"]
 

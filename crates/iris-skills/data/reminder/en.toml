@@ -1,4 +1,8 @@
 [[pattern]]
+intent = "today"
+re = '\bwhat\b.*\b(?:do i have to do|should i do|is on|is planned)\b.*\btoday\b|\bwhat\b.*\btoday\b.*\b(?:to do|on)\b'
+
+[[pattern]]
 intent = "move"
 re = '\b(?:move|postpone|reschedule|push)\b.*\breminder\b'
 
@@ -29,6 +33,11 @@ all = ["all", "every", "everything"]
 next = ["next"]
 
 [messages]
+today_reminders = "Today: {items}."
+today_at = "{title} at {time}"
+"today_open.one" = "One entry is still open on your lists."
+"today_open.other" = "{n} entries are still open on your lists."
+nothing_today = "Nothing is planned for today."
 ask_move_time = "To what time should I move “{title}”?"
 which_move = "Which reminder should I move?"
 moved = "Okay, “{title}” is moved to {when}."

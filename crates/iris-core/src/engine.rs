@@ -240,7 +240,10 @@ impl Engine {
         if let Some(p) = self.pending.take() {
             if now_ms - p.at_ms <= self.question_ttl_ms {
                 // "doch nicht" cancels, although "doch" is a filler that the utterance dropped
-                if lang.dialog.is_cancel(&utt.norm) || lang.dialog.is_cancel(&raw_words) {
+                // a plain "no" answers a yes/no or a "anything else?" for the skill; for every other question it backs out
+                let skill_answers_no = p.intent.ends_with(".more") || p.intent.ends_with(".confirm") || p.intent.ends_with(".name");
+                let words = Utterance::words(text);
+                if lang.dialog.cancels(&words) || lang.dialog.is_cancel(&utt.norm) || (!skill_answers_no && lang.dialog.only_no(&words)) {
                     let mut r = Reply::done(lang.messages.get("cancelled", &[]));
                     r.skill = "core".into();
                     r.intent = "cancel".into();

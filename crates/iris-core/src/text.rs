@@ -27,7 +27,8 @@ const EDGE: &[char] = &[',', '.', '!', '?', ';', ':', '"', '„', '“', '”', 
 impl Utterance {
     pub fn new(raw: &str, lang: &LangPack) -> Self {
         let mut tokens = Vec::new();
-        for piece in raw.split_whitespace() {
+        let normalized = lang.normalize(raw);
+        for piece in normalized.split_whitespace() {
             let orig = piece.trim_matches(EDGE);
             if orig.is_empty() {
                 continue;

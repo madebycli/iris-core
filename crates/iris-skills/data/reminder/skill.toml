@@ -36,3 +36,6 @@ id = "move.which"
 
 [[intent]]
 id = "move.time"
+
+[[intent]]
+id = "today"

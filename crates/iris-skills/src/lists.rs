@@ -68,6 +68,7 @@ impl Skill for Lists {
                 Some(add(cx, state_list, true))
             }
             "read" => Some(read(cx)),
+            "read_all" => Some(read_all(cx)),
             "check" => mark(cx, true),
             "remove" => mark(cx, false),
             "check_all" => everything(cx, true),
@@ -288,11 +289,12 @@ fn made_today(cx: &Cx, entry: &Entry) -> bool {
 /// All entries of a list, or all of today's: tick them off, or (after asking) delete them.
 fn everything(cx: &mut Cx, tick: bool) -> Option<Reply> {
     let today = today_only(cx);
-    if !today && !refers_to_a_list(cx) {
+    // "Hake alles ab": the list talked about last, the only list, or else every list
+    let list = if today { None } else { named(cx).or_else(|| cx.recall("list", RECENT_MS)).or_else(|| implied(cx)) };
+    if !today && list.is_none() && !tick && !refers_to_a_list(cx) {
         return None;
     }
-    let list = if today { None } else { named(cx).or_else(|| cx.recall("list", RECENT_MS)).or_else(|| collections(cx).into_iter().next()) };
-    let items: Vec<Entry> = open(cx).into_iter().filter(|e| if today { made_today(cx, e) } else { Some(&e.collection) == list.as_ref() }).collect();
+    let items: Vec<Entry> = open(cx).into_iter().filter(|e| if today || list.is_none() { today && made_today(cx, e) || (!today && list.is_none()) } else { Some(&e.collection) == list.as_ref() }).collect();
     let name = list.clone().unwrap_or_default();
     if items.is_empty() {
         return Some(Reply::done(if list.is_some() { cx.msg("empty", &[("list", &name)]) } else { cx.msg("no_lists", &[]) }));
@@ -320,4 +322,21 @@ fn clear_confirmed(cx: &mut Cx) -> Reply {
         }
     }
     Reply::done(if today { cx.msg("cleared_today", &[]) } else { cx.msg("cleared", &[("list", &list)]) })
+}
+
+/// Every list with what is open on it.
+fn read_all(cx: &mut Cx) -> Reply {
+    let lists = collections(cx);
+    let items = open(cx);
+    if items.is_empty() {
+        return Reply::done(cx.msg("no_lists", &[]));
+    }
+    let mut lines = Vec::new();
+    for list in lists {
+        let titles: Vec<String> = items.iter().filter(|e| e.collection == list).map(|e| e.title.clone()).collect();
+        if !titles.is_empty() {
+            lines.push(cx.msg("read_all_line", &[("list", &list), ("items", &spoken(cx, &titles))]));
+        }
+    }
+    Reply::done(lines.join(" ")).with_card(Card::Entries { title: cx.lang.messages.get("card_title", &[]), items })
 }

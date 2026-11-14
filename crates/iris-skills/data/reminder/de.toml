@@ -1,4 +1,8 @@
 [[pattern]]
+intent = "today"
+re = '\bwas\b.*\bheute\b.*\b(?:tun|machen|erledigen|an)\b|\bwas steht heute an\b'
+
+[[pattern]]
 intent = "move"
 re = '\b(?:verschieb\w*|schieb\w*|ändere?|verleg\w*|leg\w* um)\b.*\berinnerung\b'
 
@@ -33,13 +37,18 @@ weak = ["vergiss nicht"]
 # removed wherever they stand
 drop = ["nochmal", "noch einmal", "später", "erneut", "schlummern", "erinnert werden", "erinnert", "vergiss nicht", "erinnere mich", "erinner mich", "erinnere", "erinner", "erinnern", "erinnerung", "erinnerungen", "sag mir bescheid", "sagst du mir bescheid", "bescheid sagen", "bescheid", "aufgabe"]
 # removed from the front of the title, again and again
-lead = ["kannst du", "könntest du", "würdest du", "ich möchte", "ich will", "ich muss", "erstelle", "erstell", "stelle", "stell", "lege", "leg", "mache", "mach", "mir", "mich", "eine", "einen", "ein", "neue", "für", "an", "ans", "am", "daran", "dran", "dass ich", "dass", "den", "die", "das", "dem", "zum", "zur", "zu", "und", "oder", "ja", "noch", "dich", "an", "um", "daran"]
+lead = ["erstellen", "erstelle", "anlegen", "einrichten", "setze", "setz", "kannst du", "könntest du", "würdest du", "ich möchte", "ich will", "ich muss", "erstelle", "erstell", "stelle", "stell", "lege", "leg", "mache", "mach", "mir", "mich", "eine", "einen", "ein", "neue", "für", "an", "ans", "am", "daran", "dran", "dass ich", "dass", "den", "die", "das", "dem", "zum", "zur", "zu", "und", "oder", "ja", "noch", "dich", "an", "um", "daran"]
 # removed from the end of the title
 trail = ["muss", "soll", "möchte", "will", "müssen", "sollen", "kann", "könnte", "darf", "sollte", "kannst", "an", "ein", "und", "dran", "daran", "denken"]
 all = ["alle", "alles", "sämtliche"]
 next = ["nächste", "nächstes", "als nächstes"]
 
 [messages]
+today_reminders = "Heute: {items}."
+today_at = "{title} um {time}"
+"today_open.one" = "Auf deinen Listen steht noch ein Eintrag offen."
+"today_open.other" = "Auf deinen Listen stehen noch {n} Einträge offen."
+nothing_today = "Für heute steht bei mir nichts an."
 ask_move_time = "Auf wann soll ich „{title}“ verschieben?"
 which_move = "Welche Erinnerung soll ich verschieben?"
 moved = "Okay, „{title}“ ist auf {when} verschoben."
