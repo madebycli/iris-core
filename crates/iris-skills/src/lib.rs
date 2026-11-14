@@ -91,3 +91,23 @@ pub(crate) fn strip(utt: &Utterance, mut tokens: Vec<usize>, drop: &[String], le
 pub(crate) fn join(utt: &Utterance, tokens: &[usize]) -> String {
     iris_core::text::capitalise(&tokens.iter().map(|i| utt.tokens[*i].orig.as_str()).collect::<Vec<_>>().join(" "))
 }
+
+/// The entry a sentence names: the one whose whole title was said (the longest when several), or else the
+/// only one that shares the most words with it ("Lösche die Erinnerung Müll" names "Müll rausbringen").
+/// Only words of four letters or more, or with a digit, count. `None` when no entry or several fit equally.
+pub(crate) fn named<'a>(items: &'a [iris_core::Entry], said: &str) -> Option<&'a iris_core::Entry> {
+    if let Some(whole) = items.iter().filter(|e| !e.title.is_empty() && said.contains(&e.title.to_lowercase())).max_by_key(|e| e.title.len()) {
+        return Some(whole);
+    }
+    let words: Vec<&str> = said.split(' ').filter(|w| w.chars().count() >= 4 || w.chars().any(|c| c.is_ascii_digit())).collect();
+    let score = |e: &iris_core::Entry| {
+        let title = e.title.to_lowercase();
+        title.split(|c: char| !c.is_alphanumeric()).filter(|t| !t.is_empty() && words.contains(t)).count()
+            // a word said in part of a compound counts too: "Zahn" names "Zahnarzt"
+            + title.split(|c: char| !c.is_alphanumeric()).filter(|t| !words.contains(t) && said.split(' ').any(|w| w.chars().count() >= 4 && t.starts_with(w))).count()
+    };
+    let best = items.iter().map(score).max().filter(|n| *n > 0)?;
+    let mut top = items.iter().filter(|e| score(e) == best);
+    let one = top.next()?;
+    top.next().is_none().then_some(one)
+}

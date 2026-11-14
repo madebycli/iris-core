@@ -19,6 +19,9 @@ id = "dnd"
 id = "web_search"
 
 [[intent]]
+id = "send_message"
+
+[[intent]]
 id = "playing"
 
 [[intent]]

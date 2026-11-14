@@ -29,17 +29,31 @@ impl Skill for Alarm {
                 Some(at) => Reply::done(cx.msg("next", &[("when", &describe(at, &cx.now, cx.lang, false))])),
                 None => Reply::done(cx.msg("none", &[])),
             }),
-            "dismiss" => {
-                cx.ask("dismiss.confirm", json!({}));
-                Some(Reply::question(cx.msg("dismiss_ask", &[])))
+            "dismiss" | "delete" => {
+                // a time names the alarm ("Lösche den Wecker für 15 Uhr"); without one it is the next alarm
+                let expr = scan(&cx.utt.norms(), cx.lang).expr;
+                let at = expr.clock.map(|c| (c.hour, c.minute));
+                cx.ask("dismiss.confirm", json!({ "hour": at.map(|a| a.0), "minute": at.map(|a| a.1) }));
+                Some(Reply::question(match at {
+                    Some((h, m)) => {
+                        let time = cx.lang.format.clock.replace("{h}", &h.to_string()).replace("{mm}", &format!("{m:02}"));
+                        cx.msg("dismiss_ask_at", &[("time", &time)])
+                    }
+                    None => cx.msg("dismiss_ask", &[]),
+                }))
             }
             // neither yes nor no: a new request, the question is dropped
             "dismiss.confirm" if cx.lang.dialog.is_no(&cx.utt.norm) => Some(Reply::done(cx.lang.messages.get("cancelled", &[]))),
             "dismiss.confirm" if !cx.lang.dialog.is_yes(&cx.utt.norm) => None,
-            "dismiss.confirm" => Some(match cx.host.device(&iris_core::DeviceAction::DismissAlarm) {
-                Ok(_) => Reply::done(cx.msg("dismissed", &[])),
-                Err(_) => Reply::failed(cx.msg("no_clock", &[])),
-            }),
+            "dismiss.confirm" => {
+                let hour = cx.state["hour"].as_u64().map(|h| h as u8);
+                let minute = cx.state["minute"].as_u64().map(|m| m as u8).or(hour.map(|_| 0));
+                Some(match cx.host.device(&iris_core::DeviceAction::DismissAlarm { hour, minute }) {
+                    Ok(_) if hour.is_some() => Reply::done(cx.msg("dismissed_at", &[])),
+                    Ok(_) => Reply::done(cx.msg("dismissed", &[])),
+                    Err(_) => Reply::failed(cx.msg("no_clock", &[])),
+                })
+            }
             "list" => Some(match cx.host.show_alarms() {
                 Ok(()) => Reply::done(cx.msg("list_opened", &[])),
                 Err(_) => Reply::failed(cx.msg("no_clock", &[])),

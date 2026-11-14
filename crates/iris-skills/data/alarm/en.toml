@@ -1,4 +1,8 @@
 [[pattern]]
+intent = "delete"
+re = '^(?:delete|remove|clear) (?:the |my |all )?(?:next )?alarms?\b'
+
+[[pattern]]
 intent = "dismiss"
 re = '^(?:dismiss|stop|cancel|skip|turn off|disable) (?:the |my )?(?:next )?alarm$'
 
@@ -23,6 +27,8 @@ no_clock = "No clock app that accepts alarms is installed. No alarm was requeste
 next = "Your next alarm rings {when}."
 none = "Android reports no alarm."
 dismiss_ask = "Should I ask the clock app to dismiss the next alarm?"
+dismiss_ask_at = "I cannot delete a specific alarm. Should I ask the clock app to turn off the alarm at {time}?"
+dismissed_at = "I asked the clock app to turn off that alarm. Please check it there; only the clock app can delete it."
 dismissed = "I asked the clock app to dismiss the next alarm. Please check it there."
 repeating_when = "{repeat} at {time}"
 "repeat.daily" = "daily"

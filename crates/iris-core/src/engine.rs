@@ -238,37 +238,42 @@ impl Engine {
             }
         }
         // 1. an open question
+        let matches = self.grammar(&utt, &lang);
         if let Some(p) = self.pending.take() {
             if now_ms - p.at_ms <= self.question_ttl_ms {
                 // "doch nicht" cancels, although "doch" is a filler that the utterance dropped
                 // a plain "no" answers a yes/no or a "anything else?" for the skill; for every other question it backs out
                 let skill_answers_no = p.intent.ends_with(".more") || p.intent.ends_with(".confirm") || p.intent.ends_with(".name");
                 let words = Utterance::words(text);
-                // the skill's own answer to its question wins over a cancel word ("egal" = "no name" for a timer's name)
-                let skill_answer = self.skills[p.skill].langs.get(&lang.code).and_then(|l| l.words.get("no_name")).is_some_and(|list| p.intent.ends_with(".name") && list.contains(&words.join(" ")));
+                // the skill's own answer to its question wins over a cancel word ("egal" = "no name" for a timer's name,
+                // "nein danke" = "nothing more" after "Noch etwas?")
+                let skill_answer = self.skills[p.skill].langs.get(&lang.code).and_then(|l| l.words.get("no_name")).is_some_and(|list| p.intent.ends_with(".name") && list.contains(&words.join(" ")))
+                    || (p.intent.ends_with(".more") && lang.dialog.is_done(&words.join(" ")));
                 if !skill_answer && (lang.dialog.cancels(&words) || lang.dialog.is_cancel(&utt.norm) || (!skill_answers_no && lang.dialog.only_no(&words))) {
                     let mut r = Reply::done(lang.messages.get("cancelled", &[]));
                     r.skill = "core".into();
                     r.intent = "cancel".into();
                     return r;
                 }
+                // a whole new request ends the question: "Welche Erinnerungen habe ich?" while a time is asked for.
+                // Not the skill's own intent the question belongs to, and only if that skill takes it.
+                let base = p.intent.split('.').next().unwrap_or_default().to_string();
+                let new_requests: Vec<(usize, String, Slots)> = matches.iter().filter(|(i, n, _)| self.interrupts(*i, n) && !(*i == p.skill && *n == base)).cloned().collect();
+                for (index, intent, slots) in new_requests {
+                    if let Some(r) = self.run(index, &intent, &utt, slots, &lang, serde_json::Value::Null) {
+                        return r;
+                    }
+                }
                 if let Some(r) = self.run(p.skill, &p.intent, &utt, Slots::default(), &lang, p.state) {
                     return r;
                 }
             }
         }
-        // 2. grammar
-        let mut matches = Vec::new();
-        for (index, reg) in self.skills.iter().enumerate() {
-            let Some(loaded) = reg.langs.get(&lang.code) else { continue };
-            for pattern in &loaded.patterns {
-                if let Some(caps) = pattern.re.captures(&utt.norm) {
-                    let slots = pattern.re.capture_names().flatten().filter_map(|name| caps.name(name).map(|m| (name.to_string(), utt.token_range(m.range())))).collect();
-                    matches.push((index, pattern.intent.clone(), Slots(slots)));
-                    break;
-                }
-            }
+        // two requests in one sentence: "Füge Käse hinzu und entferne Eier"
+        if let Some(r) = self.split(&utt, &lang, text, code) {
+            return r;
         }
+        // 2. grammar
         for (index, intent, slots) in matches {
             if let Some(r) = self.run(index, &intent, &utt, slots, &lang, serde_json::Value::Null) {
                 return r;
@@ -288,6 +293,74 @@ impl Engine {
             }
         }
         unhandled()
+    }
+
+    /// Every skill's first matching pattern, in priority order.
+    fn grammar(&self, utt: &Utterance, lang: &LangPack) -> Vec<(usize, String, Slots)> {
+        let mut matches = Vec::new();
+        for (index, reg) in self.skills.iter().enumerate() {
+            let Some(loaded) = reg.langs.get(&lang.code) else { continue };
+            for pattern in &loaded.patterns {
+                if let Some(caps) = pattern.re.captures(&utt.norm) {
+                    let slots = pattern.re.capture_names().flatten().filter_map(|name| caps.name(name).map(|m| (name.to_string(), utt.token_range(m.range())))).collect();
+                    matches.push((index, pattern.intent.clone(), Slots(slots)));
+                    break;
+                }
+            }
+        }
+        matches
+    }
+
+    fn interrupts(&self, index: usize, intent: &str) -> bool {
+        self.skills[index].manifest.intents.iter().find(|n| n.id == intent).is_none_or(|n| n.interrupts)
+    }
+
+    /// What a part of a sentence asks for: the first pattern that matches, or the classifier when it is sure.
+    fn intent_of(&self, utt: &Utterance, lang: &LangPack, classifier_too: bool) -> Option<(usize, String)> {
+        if let Some((i, n, _)) = self.grammar(utt, lang).into_iter().next() {
+            return Some((i, n));
+        }
+        if !classifier_too {
+            return None;
+        }
+        let p = self.classifier.classify(&utt.raw, &lang.code).into_iter().next().filter(|p| p.p >= self.cutoff)?;
+        self.skills.iter().enumerate().find_map(|(i, r)| r.manifest.intents.iter().find(|n| n.acts.contains(&p.label)).map(|n| (i, n.id.clone())))
+    }
+
+    /// Two requests joined by "und": each half is asked on its own when the second half is a request by its own
+    /// patterns and the first half means something else ("Hake Milch ab und lösche Brot"). "Eier und Butter" stays one.
+    fn split(&mut self, utt: &Utterance, lang: &LangPack, text: &str, code: &str) -> Option<Reply> {
+        let joiners = &lang.dialog.joiners;
+        for at in 1..utt.len().saturating_sub(1) {
+            if !joiners.contains(&utt.tokens[at].norm) {
+                continue;
+            }
+            let left: Vec<&str> = utt.tokens[..at].iter().map(|t| t.orig.as_str()).collect();
+            let right: Vec<&str> = utt.tokens[at + 1..].iter().map(|t| t.orig.as_str()).collect();
+            if left.len() < 2 || right.len() < 2 {
+                continue;
+            }
+            let (left, right) = (left.join(" "), right.join(" "));
+            let Some(second) = self.intent_of(&Utterance::new(&right, lang), lang, false) else { continue };
+            let Some(first) = self.intent_of(&Utterance::new(&left, lang), lang, true) else { continue };
+            if first == second {
+                continue;
+            }
+            let _ = text;
+            // the first half alone is not a whole request ("Let me know in an hour" … "and a half"): the sentence is one
+            let a = self.answer(&left, code);
+            if a.kind == ReplyKind::Question || a.kind == ReplyKind::Unhandled {
+                self.pending = None;
+                return None;
+            }
+            let b = self.answer(&right, code);
+            let mut both = Reply::new(if a.kind == ReplyKind::Failed { ReplyKind::Failed } else { b.kind }, format!("{} {}", a.text, b.text));
+            both.card = b.card.or(a.card);
+            both.skill = b.skill;
+            both.intent = b.intent;
+            return Some(both);
+        }
+        None
     }
 
     fn run(&mut self, index: usize, intent: &str, utt: &Utterance, slots: Slots, lang: &LangPack, state: serde_json::Value) -> Option<Reply> {
@@ -371,6 +444,12 @@ impl Engine {
     }
 
     /// Languages the engine can be spoken to in.
+    /// Another part of the app answered the last sentence: what the core said or was asked before is no longer "the last".
+    pub fn answered_elsewhere(&mut self) {
+        self.last_reply = None;
+        self.last_request = None;
+    }
+
     pub fn languages(&self) -> Vec<String> {
         let mut codes: Vec<String> = self.langs.keys().cloned().collect();
         codes.sort();

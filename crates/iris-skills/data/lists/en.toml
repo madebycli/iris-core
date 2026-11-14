@@ -24,11 +24,19 @@ re = '\b(?:delete|remove|take)\b'
 
 [[pattern]]
 intent = "read"
-re = '\bwhat (?:is|do i have|have i got)\b.*\blist\b|\b(?:show|read|tell)\b.*\blist\b|^(?:my |the )?\p{L}+ list$'
+re = '\bwhat (?:is|do i have|have i got)\b.*\blist\b|\b(?:show|read|tell)\b.*\blist\b'
+
+[[pattern]]
+intent = "peek"
+re = '^(?:my |the )?\p{L}+ list$'
 
 [[pattern]]
 intent = "guided"
 re = '\b(?:new|create|add)\b.*\b(?:entry|item)\b'
+
+[[pattern]]
+intent = "put"
+re = '^(?:add|put|write)\b.*\b(?:to|on) (?:the |my |our )?\p{L}* list\b'
 
 [[pattern]]
 intent = "add"

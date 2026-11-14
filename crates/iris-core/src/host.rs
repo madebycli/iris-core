@@ -100,8 +100,13 @@ pub enum DeviceAction {
     DoNotDisturb { on: bool },
     /// Open a web search for `query` in the browser.
     WebSearch { query: String },
-    /// Ask the clock app to dismiss the next alarm.
-    DismissAlarm,
+    /// Ask the clock app to dismiss an alarm: the one at `hour:minute`, or the next one when no time is given.
+    DismissAlarm {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        hour: Option<u8>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        minute: Option<u8>,
+    },
 }
 
 /// What a [`DeviceAction`] did.

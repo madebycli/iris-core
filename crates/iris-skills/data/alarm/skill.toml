@@ -22,4 +22,7 @@ id = "set.time"
 id = "dismiss"
 
 [[intent]]
+id = "delete"
+
+[[intent]]
 id = "dismiss.confirm"

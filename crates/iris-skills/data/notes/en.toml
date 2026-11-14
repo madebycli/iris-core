@@ -4,7 +4,7 @@ re = '\b(?:delete|remove|clear)\b.*\bnotes?\b'
 
 [[pattern]]
 intent = "read"
-re = '\b(?:show|read|see|what are|which)\b.*\bnotes?\b'
+re = '\b(?:show|read|see|what are|which)\b.*\bnotes?\b|\bwhat (?:did|have) i (?:noted?|written down|jotted down)\b|\bwhat is in my notes\b'
 
 [[pattern]]
 intent = "add"

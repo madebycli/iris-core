@@ -1,4 +1,8 @@
 [[pattern]]
+intent = "delete"
+re = '^(?:lösch\w*|entfern\w*|streich\w*) (?:den |meinen |die |meine |alle )?(?:nächsten )?wecker\b|^(?:den |meinen )?wecker\b.*\b(?:löschen|entfernen)$'
+
+[[pattern]]
 intent = "dismiss"
 re = '^(?:verwirf|beende|stopp\w*|stop|deaktivier\w*|überspring\w*) (?:den |meinen )?(?:nächsten )?wecker(?: (?:aus|ab|weg))?$|^(?:schalt\w*|mach\w*|stell\w*) (?:den |meinen )?(?:nächsten )?wecker (?:aus|ab|weg)$|^(?:den )?(?:nächsten )?wecker (?:verwerfen|ausschalten|abschalten|überspringen|beenden|ausmachen|abstellen|deaktivieren)$'
 
@@ -23,6 +27,8 @@ no_clock = "Es ist keine Uhr-App installiert, die Wecker annimmt. Es wurde kein 
 next = "Dein nächster Wecker klingelt {when}."
 none = "Android meldet keinen Wecker."
 dismiss_ask = "Soll ich die Uhr-App bitten, den nächsten Wecker zu verwerfen?"
+dismiss_ask_at = "Einen bestimmten Wecker kann ich nicht löschen. Soll ich die Uhr-App bitten, den Wecker um {time} auszuschalten?"
+dismissed_at = "Ich habe die Uhr-App gebeten, diesen Wecker auszuschalten. Prüfe es bitte dort; ganz löschen kannst du ihn nur in der Uhr-App."
 dismissed = "Ich habe die Uhr-App gebeten, den nächsten Wecker zu verwerfen. Prüfe es bitte dort."
 repeating_when = "{repeat} um {time}"
 "repeat.daily" = "täglich"

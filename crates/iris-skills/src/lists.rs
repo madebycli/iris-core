@@ -29,7 +29,7 @@ impl Skill for Lists {
     fn handle(&self, intent: &str, cx: &mut Cx) -> Option<Reply> {
         let state_list = cx.state["list"].as_str().map(str::to_string);
         match intent {
-            "add" => Some(add(cx, None, false)),
+            "add" | "put" => Some(add(cx, None, false)),
             // "Ich muss Milch kaufen": the shopping list, without asking
             "buy" => {
                 let list = cx.table("defaults", "list").map(str::to_string);
@@ -67,7 +67,7 @@ impl Skill for Lists {
                 }
                 Some(add(cx, state_list, true))
             }
-            "read" => Some(read(cx)),
+            "read" | "peek" => Some(read(cx)),
             "read_all" => Some(read_all(cx)),
             "check" => mark(cx, true),
             "remove" => mark(cx, false),
@@ -342,5 +342,5 @@ fn read_all(cx: &mut Cx) -> Reply {
             lines.push(cx.msg("read_all_line", &[("list", &list), ("items", &spoken(cx, &titles))]));
         }
     }
-    Reply::done(lines.join(" ")).with_card(Card::Entries { title: cx.lang.messages.get("card_title", &[]), items })
+    Reply::done(lines.join(" ")).with_card(Card::Entries { title: cx.msg("card_title", &[]), items })
 }

@@ -43,6 +43,15 @@ pub struct Intent {
     /// Labels of the trained classifier that mean this intent.
     #[serde(default)]
     pub acts: Vec<String>,
+    /// A sentence that matches this intent's patterns is a new request even while a question is open,
+    /// so it ends the question. Off for intents whose patterns also fit ordinary answers
+    /// ("Einkaufsliste mitnehmen" as the title of a reminder is not a list request).
+    #[serde(default = "yes")]
+    pub interrupts: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 /// A skill's words in one language, as written in `data/<skill>/<code>.toml`.

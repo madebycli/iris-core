@@ -41,6 +41,11 @@ intent = "reply"
 re = '^(?:antworte|antwort|schreib\w*) (?:auf |bei |an |zurück an )?(?P<app>.+?) (?:mit|zurück) (?P<message>.+)$'
 
 [[pattern]]
+# writing a new message is not something Iris can do; answering a notification is
+intent = "send_message"
+re = '^(?:schreib\w*|schick\w*|send\w*) (?P<to>.+?) (?:eine |ne |n )?(?:nachricht|sms|whatsapp|mail|e mail|email)\b|^(?:schreib\w*|schick\w*|send\w*) (?:eine |ne )?(?:nachricht|sms|whatsapp|mail|email) (?:an|für) (?P<to2>.+)$'
+
+[[pattern]]
 intent = "web_search"
 re = '^(?:such\w*|google\w*|schau\w*) (?:im (?:web|internet|netz|browser)|online|bei duckduckgo) nach (?P<query>.+)$'
 
@@ -75,6 +80,7 @@ allow_settings = "Erlaube Iris, die Systemeinstellungen zu ändern, und sag es d
 allow_dnd = "Erlaube Iris den Zugriff auf Nicht stören, und sag es dann noch einmal. Ich habe die Einstellung geöffnet."
 unavailable = "Das kann ich an diesem Handy nicht einstellen."
 refused = "Android hat die Änderung nicht übernommen."
+cannot_send = "Neue Nachrichten an Kontakte kann ich nicht schreiben. Auf eine Benachrichtigung antworten geht, zum Beispiel: „Antworte Anna mit bin gleich da“."
 searched = "Ich habe die Suche nach „{query}“ im Browser geöffnet."
 no_browser = "Es gibt keinen Browser, der die Suche öffnen kann."
 playing = "Gerade läuft {title}."

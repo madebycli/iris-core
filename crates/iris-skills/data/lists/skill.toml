@@ -2,11 +2,18 @@ id = "lists"
 priority = 15
 
 [[intent]]
+id = "put"
+
+[[intent]]
 id = "add"
+# its patterns also fit answers to other questions
+interrupts = false
 acts = ["list_add"]
 
 [[intent]]
 id = "buy"
+# its patterns also fit answers to other questions
+interrupts = false
 
 [[intent]]
 id = "read_all"
@@ -14,6 +21,11 @@ id = "read_all"
 [[intent]]
 id = "read"
 acts = ["list_read"]
+
+# a bare list name ("Einkaufsliste") reads it, but as an answer it is just the name
+[[intent]]
+id = "peek"
+interrupts = false
 
 [[intent]]
 id = "remove"
@@ -31,9 +43,13 @@ id = "clear"
 
 [[intent]]
 id = "guided"
+# its patterns also fit answers to other questions
+interrupts = false
 
 [[intent]]
 id = "more"
+# its patterns also fit answers to other questions
+interrupts = false
 
 # answers to the skill's own questions
 [[intent]]

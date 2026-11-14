@@ -43,6 +43,10 @@ intent = "reply"
 re = '^(?:reply|answer|respond) to (?P<app>.+?) (?:with|saying) (?P<message>.+)$'
 
 [[pattern]]
+intent = "send_message"
+re = '^(?:send|text|write|message) (?P<to>.+?) (?:a |an )?(?:message|text|sms|email|mail)\b|^(?:send|write) (?:a |an )?(?:message|text|sms|email) to (?P<to2>.+)$'
+
+[[pattern]]
 intent = "web_search"
 re = '^search the (?:web|internet) for (?P<query>.+)$|^(?:search|look up|google) (?:for )?(?P<query2>.+?) (?:on|in) the (?:web|internet)$'
 
@@ -77,6 +81,7 @@ allow_settings = "Allow Iris to modify system settings, then say it again. I ope
 allow_dnd = "Allow Iris access to Do Not Disturb, then say it again. I opened the setting."
 unavailable = "I cannot change that on this phone."
 refused = "Android did not apply the change."
+cannot_send = "I cannot write new messages to contacts. I can answer a notification, for example: “Reply to Anna with on my way”."
 searched = "I opened a search for “{query}” in the browser."
 no_browser = "No browser can open the search."
 playing = "Now playing: {title}."

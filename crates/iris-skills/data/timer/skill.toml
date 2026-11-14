@@ -14,7 +14,22 @@ acts = ["timer_query"]
 id = "cancel"
 acts = ["timer_cancel"]
 
+[[intent]]
+id = "pause"
+
+[[intent]]
+id = "resume"
+
+[[intent]]
+id = "extend"
+
+[[intent]]
+id = "restart"
+
 # answers to the skill's own questions
+[[intent]]
+id = "control.which"
+
 [[intent]]
 id = "set.duration"
 

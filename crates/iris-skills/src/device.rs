@@ -56,6 +56,7 @@ impl Skill for Device {
                     Err(_) => Reply::failed(cx.msg("no_browser", &[])),
                 })
             }
+            "send_message" => Some(Reply::failed(cx.msg("cannot_send", &[]))),
             "playing" => Some(match cx.host.now_playing() {
                 Ok(Some(p)) if p.artist.is_empty() => Reply::done(cx.msg("playing", &[("title", &p.title)])),
                 Ok(Some(p)) => Reply::done(cx.msg("playing_by", &[("title", &p.title), ("artist", &p.artist)])),

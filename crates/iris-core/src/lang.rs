@@ -132,6 +132,9 @@ pub struct DialogWords {
     pub yes: Vec<String>,
     pub no: Vec<String>,
     pub done: Vec<String>,
+    /// Words that join two requests in one sentence ("und").
+    #[serde(default)]
+    pub joiners: Vec<String>,
 }
 
 impl DialogWords {

@@ -1,10 +1,26 @@
 [[pattern]]
+intent = "pause"
+re = '\b(?:pause|hold|halt)\b.*\btimers?\b'
+
+[[pattern]]
+intent = "resume"
+re = '\b(?:resume|continue|unpause|restart counting)\b.*\btimers?\b'
+
+[[pattern]]
+intent = "extend"
+re = '\b(?:extend|add)\b.*\btimers?\b|\btimers?\b.*\blonger\b'
+
+[[pattern]]
+intent = "restart"
+re = '\b(?:restart|reset)\b.*\btimers?\b|\bstart\b.*\btimers? (?:again|over)$'
+
+[[pattern]]
 intent = "cancel"
 re = '\b(?:cancel|stop|end|delete|remove|kill|clear)\b.*\btimers?\b'
 
 [[pattern]]
 intent = "query"
-re = '\b(?:how long|how much time|when|which|what)\b.*\btimers?\b|\btimers?\b.*\b(?:left|remaining)\b'
+re = '\b(?:how long|how much time|when|which|what|show|list|active|running)\b.*\btimers?\b|\btimers?\b.*\b(?:left|remaining)\b'
 
 [[pattern]]
 intent = "set"
@@ -34,6 +50,14 @@ cancelled_named = "{name} timer cancelled."
 which = "Which timer should I cancel: {names}?"
 not_found = "I did not find that timer."
 default_name = "Timer"
+paused = "{name} paused, {left} left."
+already_paused = "{name} is already paused, {left} left."
+resumed = "{name} is running again, {left} left."
+not_paused = "{name} is already running, {left} left."
+extended = "{name} extended by {more}, {left} left."
+ask_more = "By how much? Say for example “by five minutes”."
+restarted = "{name} restarted: {duration}."
+which_control = "Which timer: {names}?"
 
 [training]
 set = ["set a timer for {duration}", "{duration} timer", "set a {name} timer for {duration}"]

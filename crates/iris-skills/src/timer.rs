@@ -33,6 +33,11 @@ impl Skill for Timer {
                 Some(start(cx, secs, name, None))
             }
             "query" => Some(query(cx)),
+            "pause" | "resume" | "extend" | "restart" => Some(control(cx, intent, false)),
+            "control.which" => {
+                let action = cx.state["action"].as_str().unwrap_or("pause").to_string();
+                Some(control(cx, &action, true))
+            }
             "cancel" | "cancel.which" => Some(cancel(cx, intent == "cancel.which")),
             _ => None,
         }
@@ -177,4 +182,67 @@ fn cancel(cx: &mut Cx, answering: bool) -> Reply {
         },
         many => Reply::done(cx.messages.plural("cancelled_all", many.len() as i64, &[])),
     }
+}
+
+/// Pause, resume, extend or restart the timer the sentence names, or the only one; asks which when there are several.
+fn control(cx: &mut Cx, action: &str, answering: bool) -> Reply {
+    let timers = running(cx);
+    if timers.is_empty() {
+        return Reply::done(cx.msg("none", &[]));
+    }
+    let said = cx.utt.norm.clone();
+    let named: Vec<&Entry> = timers.iter().filter(|t| label(cx, t).is_some_and(|n| said.contains(&n.to_lowercase()))).collect();
+    let target = match (named.as_slice(), timers.len()) {
+        ([one], _) => (*one).clone(),
+        ([], 1) => timers[0].clone(),
+        _ if answering => return Reply::failed(cx.msg("not_found", &[])),
+        _ => {
+            let names = timers.iter().map(|t| t.title.clone()).collect::<Vec<_>>().join(", ");
+            cx.ask("control.which", json!({ "action": action }));
+            return Reply::question(cx.msg("which_control", &[("names", &names)]));
+        }
+    };
+    let now = cx.now_ms();
+    let mut entry = target;
+    let paused = entry.remaining_ms > 0;
+    let key = match action {
+        "pause" if paused => "already_paused",
+        "pause" => {
+            entry.remaining_ms = entry.left_ms(now).max(1);
+            "paused"
+        }
+        "resume" if !paused => "not_paused",
+        "resume" => {
+            entry.due_at = Some(now + entry.remaining_ms);
+            entry.remaining_ms = 0;
+            "resumed"
+        }
+        "extend" => {
+            let Some((secs, _)) = scan_duration(&cx.utt.norms(), cx.lang) else {
+                return Reply::failed(cx.msg("ask_more", &[]));
+            };
+            if paused {
+                entry.remaining_ms += secs * 1000;
+            } else {
+                entry.due_at = Some(entry.due_at.unwrap_or(now) + secs * 1000);
+            }
+            "extended"
+        }
+        _ => {
+            entry.due_at = Some(now + entry.duration_ms.max(1000));
+            entry.remaining_ms = 0;
+            "restarted"
+        }
+    };
+    cx.store.put(entry.clone());
+    // the host plans a running timer's alarm and shows a paused one as paused (remaining_ms > 0)
+    if !matches!(key, "already_paused" | "not_paused") {
+        cx.host.unschedule(&entry.id);
+        let _ = cx.host.schedule(&entry);
+    }
+    let more = scan_duration(&cx.utt.norms(), cx.lang).map(|(s, _)| describe_duration(s, cx.lang)).unwrap_or_default();
+    let left = describe_duration((entry.left_ms(now) + 999) / 1000, cx.lang);
+    let duration = describe_duration(entry.duration_ms / 1000, cx.lang);
+    let name = entry.title.clone();
+    Reply::done(cx.msg(key, &[("name", &name), ("left", &left), ("more", &more), ("duration", &duration)])).with_card(Card::Timer { entry })
 }

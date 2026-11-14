@@ -219,6 +219,11 @@ impl IrisCore {
         self.engine.lock().unwrap().fired(&id);
     }
 
+    /// The app answered the last sentence itself: "say that again" and "do that again" are no longer the core's.
+    pub fn answered_elsewhere(&self) {
+        self.engine.lock().unwrap().answered_elsewhere();
+    }
+
     pub fn languages(&self) -> Vec<String> {
         self.engine.lock().unwrap().languages()
     }

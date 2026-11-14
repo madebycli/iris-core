@@ -80,6 +80,7 @@ fn create(cx: &mut Cx, mut draft: Draft) -> Reply {
         }
     }
     draft.time.merge(found.expr);
+    let title_before = draft.title.clone();
     if draft.awaiting != "time" || draft.title.is_empty() {
         let tokens: Vec<usize> = cx.span("rest").filter(|i| free[*i]).collect();
         let said = cx.rewrite(&join(cx.utt, &strip(cx.utt, tokens, cx.list("drop"), cx.list("lead"), cx.list("trail"))));
@@ -93,6 +94,7 @@ fn create(cx: &mut Cx, mut draft: Draft) -> Reply {
         Err(error) => {
             let key = match (error, draft.awaiting.as_str(), draft.title.is_empty()) {
                 (TimeError::Past, _, _) => "time_past",
+                (TimeError::Missing, "time", false) if title_before.is_empty() => "ask_time_for",
                 (TimeError::Invalid, _, _) | (TimeError::Missing, "time", _) => "time_unclear",
                 (TimeError::Missing, _, true) => "ask_time",
                 (TimeError::Missing, _, false) => "ask_time_for",
@@ -193,8 +195,7 @@ fn delete(cx: &mut Cx, answering: bool) -> Reply {
         cx.ask("delete.confirm", json!({}));
         return Reply::question(cx.messages.plural("confirm_all", items.len() as i64, &[]));
     }
-    let said = &cx.utt.norm;
-    let hit = items.iter().filter(|e| said.contains(&e.title.to_lowercase())).max_by_key(|e| e.title.len());
+    let hit = crate::named(&items, &cx.utt.norm);
     match hit {
         Some(entry) => {
             cx.host.unschedule(&entry.id);
@@ -238,7 +239,7 @@ fn shift(cx: &mut Cx, id: Option<String>, mut expr: TimeExpr, answering: bool) -
     let said = cx.utt.norm.clone();
     let target = id
         .and_then(|id| items.iter().find(|e| e.id == id).cloned())
-        .or_else(|| items.iter().filter(|e| said.contains(&e.title.to_lowercase())).max_by_key(|e| e.title.len()).cloned())
+        .or_else(|| crate::named(&items, &said).cloned())
         .or_else(|| (items.len() == 1).then(|| items[0].clone()));
     let Some(target) = target else {
         if answering {
@@ -259,6 +260,9 @@ fn shift(cx: &mut Cx, id: Option<String>, mut expr: TimeExpr, answering: bool) -
             return Reply::question(cx.msg(key, &[("title", &target.title)]));
         }
     };
+    // only a clock time ("auf 9 Uhr"): the same day as before, at the half of the day nearest the old time
+    let at = same_day(&expr, &target, &cx.now).unwrap_or(resolved.at);
+    let resolved = Resolved { at, ..resolved };
     let mut moved = target.clone();
     moved.due_at = Some(resolved.at.as_millisecond());
     cx.host.unschedule(&moved.id);
@@ -331,4 +335,23 @@ fn today(cx: &mut Cx) -> Reply {
     }
     let reply = Reply::done(said);
     if due.is_empty() { reply } else { reply.with_card(Card::Entries { title: cx.msg("card_title", &[]), items: due }) }
+}
+
+/// The reminder's own day at the clock time said, when nothing but a clock time was said and that is still ahead.
+fn same_day(expr: &TimeExpr, target: &Entry, now: &jiff::Zoned) -> Option<jiff::Timestamp> {
+    let clock = expr.clock.as_ref()?;
+    if expr.day.is_some() || expr.relative_secs.is_some() {
+        return None;
+    }
+    let old = jiff::Timestamp::from_millisecond(target.due_at?).ok()?.to_zoned(now.time_zone().clone());
+    let mut hours = vec![clock.hour];
+    if !clock.exact && (1..12).contains(&clock.hour) {
+        hours.push(clock.hour + 12);
+    }
+    hours
+        .into_iter()
+        .filter_map(|h| old.date().at(h as i8, clock.minute as i8, 0, 0).to_zoned(now.time_zone().clone()).ok())
+        .filter(|z| z.timestamp() > now.timestamp())
+        .min_by_key(|z| (z.timestamp().as_second() - old.timestamp().as_second()).abs())
+        .map(|z| z.timestamp())
 }

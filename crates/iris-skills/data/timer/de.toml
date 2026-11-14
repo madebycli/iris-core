@@ -1,10 +1,26 @@
 [[pattern]]
+intent = "pause"
+re = '\b(?:pausier\w*|unterbrech\w*|anhalt\w*|halte|pause)\b.*\b\w*timer\b(?: an| kurz an)?$|^(?:den |meinen )?\w*timer (?:pausieren|anhalten|unterbrechen)$'
+
+[[pattern]]
+intent = "resume"
+re = '\b(?:setz\w*|lass\w*|mach\w*)\b.*\b\w*timer\b.*\b(?:fort|weiter\w*)$|^(?:den |meinen )?\w*timer (?:fortsetzen|weiter|weiterlaufen lassen|weitermachen|weiterlaufen)$|\bfortsetz\w*\b.*\b\w*timer\b'
+
+[[pattern]]
+intent = "extend"
+re = '\bverlänger\w*\b.*\b\w*timer\b|\b\w*timer\b.*\b(?:verlängern|länger)\b|\b(?:gib|pack)\w*\b.*\bauf (?:den |meinen )?\w*timer\b'
+
+[[pattern]]
+intent = "restart"
+re = '\b(?:start\w*|setz\w*)\b.*\b\w*timer\b.*\b(?:neu|zurück|von vorn\w*|nochmal|noch einmal)$|^(?:den |meinen )?\w*timer (?:neu starten|neustarten|zurücksetzen)$'
+
+[[pattern]]
 intent = "cancel"
 re = '\b(?:beend\w*|stopp\w*|lösch\w*|brich|entfern\w*|abbrechen)\b.*\b\w*timer\b|\b\w*timer\b.*\b(?:beenden|stoppen|löschen|abbrechen|aus|weg|ab)$'
 
 [[pattern]]
 intent = "query"
-re = '\b(?:wie lange|wie viel zeit|wann|welche|laufen|läuft)\b.*\b\w*timer\b|\b\w*timer\b.*\b(?:noch|übrig)\b'
+re = '\b(?:wie lange|wie viel zeit|wann|welche|laufen|läuft|zeig\w*|aktive\w*|laufende\w*|gibt es)\b.*\b\w*timer\b|\b\w*timer\b.*\b(?:noch|übrig)\b'
 
 [[pattern]]
 intent = "set"
@@ -35,6 +51,14 @@ cancelled_named = "{name}-Timer beendet."
 which = "Welchen Timer soll ich beenden: {names}?"
 not_found = "Diesen Timer habe ich nicht gefunden."
 default_name = "Timer"
+paused = "{name} angehalten, noch {left}."
+already_paused = "{name} ist schon angehalten, noch {left}."
+resumed = "{name} läuft weiter, noch {left}."
+not_paused = "{name} läuft schon, noch {left}."
+extended = "{name} um {more} verlängert, noch {left}."
+ask_more = "Um wie viel soll ich ihn verlängern? Sag zum Beispiel „um fünf Minuten“."
+restarted = "{name} neu gestartet: {duration}."
+which_control = "Welchen Timer: {names}?"
 
 [training]
 set = ["timer für {duration}", "stell einen timer auf {duration}", "{name} timer {duration}", "weck mich in {duration}"]

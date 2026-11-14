@@ -32,11 +32,20 @@ re = '\b(?:lösch\w*|streich\w*|entfern\w*)\b|\bnimm\b.*\b(?:von|aus|runter|weg)
 
 [[pattern]]
 intent = "read"
-re = '\bwas (?:steht|ist|habe ich|hab ich|muss ich)\b.*\b(?:\p{L}*liste|\p{L}*zettel|einkaufen)\b|\b(?:zeig\w*|lies|gib|sag)\b.*\b\p{L}*liste\b|^(?:meine |die )?\p{L}*liste$|\bhabe ich\b.*\bauf\b.*\bliste\b'
+re = '\bwas (?:steht|ist|habe ich|hab ich|muss ich)\b.*\b(?:\p{L}*liste|\p{L}*zettel|einkaufen)\b|\b(?:zeig\w*|lies|gib|sag)\b.*\b\p{L}*liste\b|\bhabe ich\b.*\bauf\b.*\bliste\b'
+
+[[pattern]]
+intent = "peek"
+re = '^(?:meine |die )?\p{L}*(?:liste|zettel)$'
 
 [[pattern]]
 intent = "guided"
 re = '\b(?:neuen?|erstell\w*)\b.*\beintrag\b'
+
+[[pattern]]
+# a whole request to put something on a list: also ends an open question
+intent = "put"
+re = '^(?:setz\w*|füg\w*|schreib\w*|pack\w*|trag\w*|tu|tue|nimm)\b.*\b(?:auf|zu|zur|in) (?:die |meine |der |den |unsere |meinen )?\p{L}*(?:liste|zettel)\b'
 
 [[pattern]]
 intent = "add"
@@ -66,7 +75,7 @@ list = "Einkauf"
 [words]
 school = ["hausaufgabe", "hausaufgaben", "hausi", "hausis"]
 sentence_start = ["was", "wie", "wann", "wer", "wo", "welche", "warum", "zeig", "zeige", "lies", "kannst", "könntest", "stell", "stelle", "erinnere", "erinner", "lösche", "hake", "timer", "erstelle", "erstell", "mach", "mache", "starte", "öffne", "ruf", "spiel", "schalte", "sag", "such"]
-list_stop = ["meine", "meiner", "die", "der", "eine", "einer", "auf", "zur", "zu", "alle", "alles", "deine", "ab", "hinzu", "noch", "bitte", "setzen", "steht", "ist"]
+list_stop = ["schreiben", "packen", "tun", "eintragen", "hinzufügen", "machen", "stellen", "bringen", "nehmen", "notieren", "meine", "meiner", "die", "der", "eine", "einer", "auf", "zur", "zu", "alle", "alles", "deine", "ab", "hinzu", "noch", "bitte", "setzen", "steht", "ist"]
 drop = ["hin zu", "hinzufügen", "hinzu", "dazu", "drauf", "vergiss nicht", "zu setzen", "zu schreiben", "kannst du", "könntest du", "ich bräuchte", "ich brauche", "ich brauch", "fehlt", "fehlen"]
 lead = ["ich möchte gerne", "ich möchte", "ich will", "gerne", "gern", "nimm", "hinzufügen", "füge", "füg", "setze", "setz", "schreibe", "schreib", "packe", "pack", "tu", "tue", "trage", "trag", "notiere", "notier", "mir", "ja", "und", "dann", "auch", "noch", "ich muss", "außerdem", "ok", "okay", "also"]
 trail = ["ein", "auf", "noch", "setzen", "rauf", "drauf"]
