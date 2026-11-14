@@ -129,14 +129,27 @@ fn name_in(cx: &Cx, used: &[bool]) -> String {
     iris_core::text::capitalise(&parts.join(" "))
 }
 
+/// Whether the sentence names this timer: its name, or a word like "Nudeltimer" whose first part begins its name.
+fn names(cx: &Cx, entry: &Entry, said: &str) -> bool {
+    let Some(name) = label(cx, entry).map(|n| n.to_lowercase()) else { return false };
+    said.contains(&name)
+        || said.split(' ').any(|w| cx.list("name_suffix").iter().any(|s| w.strip_suffix(s.as_str()).is_some_and(|stem| stem.chars().count() >= 3 && name.starts_with(stem.trim_end_matches('-')))))
+}
+
 fn label(cx: &Cx, entry: &Entry) -> Option<String> {
     (entry.title != cx.msg("default_name", &[])).then(|| entry.title.clone())
 }
 
 fn query(cx: &mut Cx) -> Reply {
-    let timers = running(cx);
+    let mut timers = running(cx);
     if timers.is_empty() {
         return Reply::done(cx.msg("none", &[]));
+    }
+    // "Wie lange läuft der Nudeltimer noch?": only that one
+    let said = cx.utt.norm.clone();
+    let named: Vec<Entry> = timers.iter().filter(|t| names(cx, t, &said)).cloned().collect();
+    if !named.is_empty() {
+        timers = named;
     }
     let now = cx.now_ms();
     let lines: Vec<String> = timers
@@ -158,7 +171,7 @@ fn cancel(cx: &mut Cx, answering: bool) -> Reply {
         return Reply::done(cx.msg("none", &[]));
     }
     let said = cx.utt.norm.clone();
-    let named: Vec<&Entry> = timers.iter().filter(|t| label(cx, t).is_some_and(|n| said.contains(&n.to_lowercase()))).collect();
+    let named: Vec<&Entry> = timers.iter().filter(|t| names(cx, t, &said)).collect();
     let all = cx.utt.tokens.iter().any(|t| cx.list("all").contains(&t.norm));
     let targets: Vec<&Entry> = if !named.is_empty() {
         named
@@ -191,7 +204,7 @@ fn control(cx: &mut Cx, action: &str, answering: bool) -> Reply {
         return Reply::done(cx.msg("none", &[]));
     }
     let said = cx.utt.norm.clone();
-    let named: Vec<&Entry> = timers.iter().filter(|t| label(cx, t).is_some_and(|n| said.contains(&n.to_lowercase()))).collect();
+    let named: Vec<&Entry> = timers.iter().filter(|t| names(cx, t, &said)).collect();
     let target = match (named.as_slice(), timers.len()) {
         ([one], _) => (*one).clone(),
         ([], 1) => timers[0].clone(),

@@ -51,6 +51,7 @@
 <! Wie lange soll
 > Wie lange läuft der Nudeltimer noch?
 < noch 8 Minuten
+<! 10 Minuten
 > Welche Timer habe ich?
 < Nudeln
 = count timer 2
