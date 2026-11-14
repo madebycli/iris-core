@@ -10,3 +10,7 @@ re = '\bwhat (?:day|date) is it\b|\btoday s date\b|\bwhat is the date\b|\bwhat d
 time = "It is {time}."
 date = "Today is {weekday}, {month} {day}, {year}."
 date_weekday = "Today is {weekday}."
+
+[training]
+time = ["what time is it", "tell me the time"]
+date = ["what day is it today", "what is the date today"]

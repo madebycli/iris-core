@@ -22,3 +22,8 @@ list_opened = "I opened the alarm list in the clock app. Android only shares the
 
 [words]
 repeat_note = ["daily", "weekdays"]
+
+[training]
+set = ["set an alarm for {when}", "wake me {when}"]
+next = ["when does my next alarm ring"]
+list = ["show me my alarms", "which alarms do i have"]

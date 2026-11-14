@@ -10,3 +10,7 @@ re = '\bwelche[nrs]? (?:tag|datum|wochentag)\b|\bwas für ein tag\b|\bwelches da
 time = "Es ist {time}."
 date = "Heute ist {weekday}, der {day}. {month} {year}."
 date_weekday = "Heute ist {weekday}."
+
+[training]
+time = ["wie spät ist es", "wie viel uhr haben wir", "sag mir die uhrzeit"]
+date = ["welcher tag ist heute", "welches datum haben wir", "den wievielten haben wir heute"]

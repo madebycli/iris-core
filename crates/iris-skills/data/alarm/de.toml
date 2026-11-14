@@ -22,3 +22,8 @@ list_opened = "Ich habe die Weckerliste in der Uhr-App geöffnet. Android gibt m
 
 [words]
 repeat_note = ["täglich", "werktags"]
+
+[training]
+set = ["stell einen wecker auf {when}", "weck mich {when}", "wecker für {when}"]
+next = ["wann klingelt mein nächster wecker", "wann werde ich morgen geweckt"]
+list = ["zeig mir meine wecker", "welche wecker habe ich gestellt"]
