@@ -11,6 +11,7 @@ intent = "add"
 re = '\bnotes?\b|^write (?:this|that) down\b'
 
 [words]
+remove_noise = ["delete", "remove", "clear", "the", "my", "note", "notes", "a", "please", "with"]
 drop = ["write this down", "write that down", "can you", "could you"]
 lead = ["take a note", "make a note", "add a note", "create a note", "new note", "note down", "note that", "note", "a note", "that", "of", "to", "my notes", "add to my notes", "and"]
 trail = ["as a note", "to my notes"]

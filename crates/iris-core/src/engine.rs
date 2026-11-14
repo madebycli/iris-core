@@ -205,7 +205,8 @@ impl Engine {
             r.skill = "core".into();
             r
         };
-        if utt.is_empty() {
+        // a sentence made only of filler words ("Halt") may still be a way of backing out: only truly empty text is nothing
+        if utt.is_empty() && Utterance::words(text).is_empty() {
             return unhandled();
         }
         let now_ms = self.host.now_ms();

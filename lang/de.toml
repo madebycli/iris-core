@@ -119,7 +119,7 @@ weekly = ["wöchentlich", "jede woche"]
 
 [dialog]
 fillers = ["bitte", "mal", "ähm", "äh", "hm", "doch", "eben", "halt", "iris", "hey", "hallo", "hi"]
-cancel = ["abbrechen", "abbruch", "stopp", "stop", "halt", "vergiss es", "vergiss das", "lass das", "lass mal", "lass es", "lass gut sein", "schon gut", "egal", "nein danke", "doch nicht", "brich ab", "das reicht", "reicht", "genug", "cancel", "never mind", "nevermind"]
+cancel = ["abbrechen", "abbruch", "stopp", "stop", "halt", "vergiss es", "vergiss das", "lass das", "lass mal", "lass es", "lass gut sein", "schon gut", "nein danke", "doch nicht", "brich ab", "das reicht", "reicht", "genug", "cancel", "never mind", "nevermind"]
 soft = ["nein", "nee", "nö", "ne", "ok", "okay", "also", "dann", "bitte", "jetzt", "na", "ja"]
 say_again = ["sag das nochmal", "sag das noch mal", "sag es nochmal", "wie bitte", "was hast du gesagt", "noch mal bitte", "nochmal bitte"]
 repeat = ["wiederhole das", "wiederhole es", "mach das nochmal", "mach das noch mal", "noch einmal", "nochmal", "das gleiche nochmal"]

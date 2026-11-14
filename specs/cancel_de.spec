@@ -654,3 +654,8 @@
 > Nein
 = item "Milch" list=Einkauf
 = count item 1
+
+## "halt" is also a filler word, and still a way of stopping
+> Erstelle eine Erinnerung
+> Halt
+= count reminder 0

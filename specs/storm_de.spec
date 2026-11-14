@@ -166,3 +166,28 @@
 > Was muss ich heute tun?
 < Wäsche
 < offen
+
+## ticking one entry, the list named
+@item "Milch" Einkauf
+@item "Brot" Einkauf
+> Hake Milch auf der Einkaufsliste ab
+= item "Milch" done
+= item "Brot" open
+
+## ticking one entry, "list Einkauf"
+@item "Milch" Einkauf
+@item "Brot" Einkauf
+> Hake Milch von der Liste Einkauf ab
+= item "Milch" done
+= item "Brot" open
+
+## deleting a note by a part of its title
+> Notiere Milch kaufen
+> Lösche die Notiz Milch
+= count note 0
+
+## "egal" skips the name of a step-by-step timer
+> Timer
+> zehn Minuten
+> Egal
+= timer "Timer" 600s

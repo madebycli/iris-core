@@ -60,8 +60,15 @@ fn remove(cx: &mut Cx, answering: bool) -> Reply {
         cx.ask("clear.confirm", json!({}));
         return Reply::question(cx.messages.plural("confirm_all", notes.len() as i64, &[]));
     }
-    // the longest note whose words are in the sentence
-    let hit = notes.iter().filter(|n| said.contains(&n.title.to_lowercase())).max_by_key(|n| n.title.len()).cloned();
+    // the notes that contain every word the user said besides the verb ("Lösche die Notiz Milch")
+    let noise = cx.list("remove_noise");
+    let query: Vec<&str> = cx.utt.tokens.iter().map(|t| t.norm.as_str()).filter(|w| !noise.iter().any(|n| n == w)).collect();
+    let matching: Vec<Entry> = notes.iter().filter(|n| !query.is_empty() && query.iter().all(|q| n.title.to_lowercase().contains(q))).cloned().collect();
+    let hit = if matching.len() == 1 { matching.first().cloned() } else { None };
+    if matching.len() > 1 && !answering {
+        cx.ask("remove.which", json!({}));
+        return Reply::question(cx.msg("ask_which", &[])).with_card(Card::Entries { title: cx.msg("card_title", &[]), items: matching });
+    }
     match hit {
         Some(note) => {
             cx.store.delete(&note.id);

@@ -8,7 +8,7 @@ re = '\bha[ck]\w*\b.*\b(?:alles|alle)\b.*\bab$|\balles?\b.*\babhaken$'
 
 [[pattern]]
 intent = "check_all"
-re = '\bha[ck]\w*\b.*\b\p{L}*(?:liste|zettel)\b.*\bab$'
+re = '^ha[ck]\w* (?:die |meine |den |alles auf (?:der|meiner) )?\p{L}*(?:liste|zettel)(?: \p{L}+)? ab$'
 
 [[pattern]]
 intent = "clear"

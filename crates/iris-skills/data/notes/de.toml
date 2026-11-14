@@ -11,6 +11,7 @@ intent = "add"
 re = '\bnotier\w*\b|\bnotiz(?:en)?\b|^schreib\w* (?:das )?auf\b'
 
 [words]
+remove_noise = ["lösche", "lösch", "löschen", "entferne", "entfernen", "streiche", "streich", "die", "das", "den", "meine", "notiz", "notizen", "mit", "bitte", "eine"]
 drop = ["zu meinen notizen hinzu", "in meine notizen", "auf meine notizen", "zu meinen notizen", "meine notizen", "hinzufügen", "hinzu", "schreib das auf", "schreibe das auf", "kannst du", "könntest du"]
 lead = ["schreibe auf", "schreib auf", "mache eine neue notiz", "mach eine neue notiz", "speichere die notiz", "speicher die notiz", "eine neue notiz", "füge", "füg", "schreibe", "schreib", "setze", "setz", "speichere", "speicher", "mache", "mach", "eine kleine notiz erstellen", "kleine notiz erstellen", "eine kleine notiz", "kleine notiz", "notiz erstellen", "erstellen", "neue notiz", "und zwar", "zwar", "notiere dir", "notier dir", "notiere", "notier", "notieren", "füge zu meinen notizen hinzu", "schreib in meine notizen", "schreibe in meine notizen", "leg eine notiz an", "lege eine notiz an", "mach eine notiz", "mache eine notiz", "erstelle eine notiz", "ich möchte eine notiz machen", "ich will etwas notieren", "ich möchte etwas notieren", "neue notiz", "eine notiz", "notiz", "dass", "mir", "dir", "hey", "und", "ja"]
 trail = ["notieren", "als notiz", "in meine notizen"]
