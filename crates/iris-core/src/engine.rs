@@ -215,6 +215,9 @@ impl Engine {
         let Some(mut entry) = self.store.get(id) else { return };
         let now = Timestamp::from_millisecond(self.host.now_ms()).unwrap_or(Timestamp::UNIX_EPOCH);
         let next = entry.due_at.and_then(|d| Timestamp::from_millisecond(d).ok()).and_then(|due| next_occurrence(due, &entry.repeat, &entry.zone, now));
+        if entry.kind == EntryKind::Reminder {
+            self.memory.insert("reminder.fired".into(), (id.to_string(), self.host.now_ms()));
+        }
         match next {
             Some(at) => {
                 entry.due_at = Some(at.as_millisecond());

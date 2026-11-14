@@ -29,6 +29,14 @@ pub trait Phone: Send + Sync {
     /// Creates a calendar event (JSON of an external event). Returns the calendar's name.
     fn create_event(&self, event: String) -> Option<String>;
 
+    /// Asks the clock app for an alarm (JSON `{"at_ms","hour","minute"}`). `None`: no clock app took it;
+    /// `Some(true)`: the device confirmed it; `Some(false)`: handed over, no receipt.
+    fn set_alarm(&self, alarm: String) -> Option<bool>;
+    /// Time of the next alarm that will ring, in milliseconds.
+    fn next_alarm(&self) -> Option<i64>;
+    /// Opens the clock app's alarm list. False when there is none.
+    fn show_alarms(&self) -> bool;
+
     /// Stored entries as a JSON array, of one kind ("REMINDER", "TIMER", "NOTE", "LIST_ITEM") or all.
     fn entries(&self, kind: Option<String>) -> String;
     fn entry(&self, id: String) -> Option<String>;
@@ -60,6 +68,16 @@ impl Host for Bridge {
     }
     fn unschedule(&self, id: &str) {
         self.0.unschedule(id.to_string());
+    }
+    fn set_alarm(&self, alarm: &iris_core::AlarmRequest) -> Result<bool, HostError> {
+        let json = serde_json::to_string(alarm).map_err(|e| HostError::Failed(e.to_string()))?;
+        self.0.set_alarm(json).ok_or(HostError::Unavailable)
+    }
+    fn next_alarm(&self) -> Option<i64> {
+        self.0.next_alarm()
+    }
+    fn show_alarms(&self) -> Result<(), HostError> {
+        self.0.show_alarms().then_some(()).ok_or(HostError::Unavailable)
     }
     fn task_lists(&self) -> Result<Vec<ExternalList>, HostError> {
         let json = self.0.task_lists().ok_or(HostError::Unavailable)?;

@@ -141,6 +141,7 @@ pub struct Format {
     pub clock: String,
     pub date: String,
     pub weekday_names: Vec<String>,
+    pub month_names: Vec<String>,
     pub list_and: String,
 }
 

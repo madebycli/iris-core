@@ -1,4 +1,12 @@
 [[pattern]]
+intent = "move"
+re = '\b(?:move|postpone|reschedule|push)\b.*\breminder\b'
+
+[[pattern]]
+intent = "snooze"
+re = '\bsnooze\b|\bremind me (?:again|later)\b|\bagain\b.*\bremind\w*\b|\bremind\w*\b.*\bagain\b'
+
+[[pattern]]
 intent = "delete"
 re = '\b(?:delete|remove|cancel|clear)\b.*\breminders?\b'
 
@@ -14,13 +22,17 @@ re = '\bremind\w*\b|\b(?:set|create|add|make|schedule)\b.*\breminder\b|\blet me 
 list_hint = '\b(?:to|on|in) (?:my |the )?(?P<a>\p{L}+) list\b'
 
 [words]
-drop = ["remind me", "reminder", "remind", "let me know"]
+drop = ["again", "later", "snooze", "remind me", "reminder", "remind", "let me know"]
 lead = ["can you", "could you", "would you", "please", "i need to", "i have to", "i want to", "i would like", "set", "create", "add", "make", "schedule", "me", "a", "an", "the", "new", "for", "to", "about", "that i need to", "that i have to", "that i", "that", "of", "and"]
 trail = ["and", "to"]
 all = ["all", "every", "everything"]
 next = ["next"]
 
 [messages]
+ask_move_time = "To what time should I move “{title}”?"
+which_move = "Which reminder should I move?"
+moved = "Okay, “{title}” is moved to {when}."
+snoozed = "Okay, I will remind you again about “{title}” in {duration}."
 ask_time = "At what time, or when should I remind you?"
 ask_time_for = "When should I remind you about “{title}”?"
 ask_title = "What should the reminder be called?"

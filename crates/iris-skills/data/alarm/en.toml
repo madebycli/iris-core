@@ -1,0 +1,24 @@
+[[pattern]]
+intent = "next"
+re = '\bwhen\b.*\b(?:next|goes off|rings)\b.*\balarm\b|\bnext alarm\b|\bwhen will i be woken\b'
+
+[[pattern]]
+intent = "list"
+re = '\b(?:which|show|list|all|what)\b.*\balarms\b'
+
+[[pattern]]
+intent = "set"
+re = '\b(?:set|create|make|add|new|start)\b.*\balarm\b|\bwake me\b|\bwake up call\b|\balarm (?:for|at|in|tomorrow|tonight)\b|^alarm$'
+
+[messages]
+set = "The alarm is set for {when}."
+handed_over = "Alarm for {when} sent to the clock app. Android has not confirmed it."
+ask_time = "What time should the alarm ring?"
+time_unclear = "I cannot hand over that time unambiguously. What time should the alarm ring?"
+no_clock = "No clock app that accepts alarms is installed. No alarm was requested."
+next = "Your next alarm rings {when}."
+none = "Android reports no alarm."
+list_opened = "I opened the alarm list in the clock app. Android only shares the next alarm with me."
+
+[words]
+repeat_note = ["daily", "weekdays"]

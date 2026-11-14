@@ -1,0 +1,24 @@
+[[pattern]]
+intent = "next"
+re = '\bwann\b.*\b(?:nächste[rn]?|klingelt|weckt)\b.*\bwecker\b|\bnächste[rn]? wecker\b|\bwann (?:werde ich|wirst du mich) geweckt\b|\bwie lange noch bis zum wecker\b'
+
+[[pattern]]
+intent = "list"
+re = '\b(?:welche|zeig\w*|liste|alle)\b.*\bwecker\b|\bwecker(?:liste)?\b.*\b(?:zeigen|anzeigen)\b'
+
+[[pattern]]
+intent = "set"
+re = '\b(?:stell\w*|setz\w*|erstell\w*|mach\w*|richte\w*|programmier\w*|neue[nr]?)\b.*\bwecker\b|\bweck\w* mich\b|\bwecker (?:für|auf|um|in|morgen|heute)\b|^wecker$'
+
+[messages]
+set = "Der Wecker steht auf {when}."
+handed_over = "Wecker für {when} an die Uhr-App übergeben. Android hat ihn noch nicht bestätigt."
+ask_time = "Für wann soll der Wecker klingeln?"
+time_unclear = "Diese Zeit kann ich nicht eindeutig übergeben. Für wann soll der Wecker klingeln?"
+no_clock = "Es ist keine Uhr-App installiert, die Wecker annimmt. Es wurde kein Wecker angefordert."
+next = "Dein nächster Wecker klingelt {when}."
+none = "Android meldet keinen Wecker."
+list_opened = "Ich habe die Weckerliste in der Uhr-App geöffnet. Android gibt mir nur den nächsten Wecker frei."
+
+[words]
+repeat_note = ["täglich", "werktags"]

@@ -24,3 +24,15 @@ id = "delete.which"
 
 [[intent]]
 id = "delete.confirm"
+
+[[intent]]
+id = "move"
+
+[[intent]]
+id = "snooze"
+
+[[intent]]
+id = "move.which"
+
+[[intent]]
+id = "move.time"

@@ -39,6 +39,16 @@ impl Skill for Reminder {
                 let draft: Draft = serde_json::from_value(cx.state.clone()).unwrap_or_default();
                 Some(create(cx, draft))
             }
+            "move" => Some(shift(cx, None, TimeExpr::default(), false)),
+            "move.which" => {
+                let expr: TimeExpr = serde_json::from_value(cx.state["time"].clone()).unwrap_or_default();
+                Some(shift(cx, None, expr, true))
+            }
+            "move.time" => {
+                let id = cx.state["id"].as_str().map(str::to_string);
+                Some(shift(cx, id, TimeExpr::default(), true))
+            }
+            "snooze" => snooze(cx),
             "list" => Some(list(cx)),
             "delete" => Some(delete(cx, false)),
             "delete.which" => Some(delete(cx, true)),
@@ -127,6 +137,7 @@ fn save(cx: &mut Cx, draft: &Draft, at: &Resolved) -> Reply {
     entry.due_at = Some(due);
     entry.repeat = repeat.clone();
     cx.store.put(entry.clone());
+    cx.remember("last", &entry.id);
     let _ = cx.host.schedule(&entry);
     let text = if outside.is_some() {
         cx.msg("fallback_local", &[("title", title), ("when", &when)])
@@ -207,4 +218,84 @@ fn delete_all(cx: &mut Cx) -> Reply {
         cx.store.delete(&e.id);
     }
     Reply::done(cx.messages.plural("deleted_all", items.len() as i64, &[]))
+}
+
+/// Moves a reminder to another time: "verschiebe die Erinnerung Oma auf 18 Uhr". `answering` is true
+/// when this utterance answers one of the skill's own questions.
+fn shift(cx: &mut Cx, id: Option<String>, mut expr: TimeExpr, answering: bool) -> Reply {
+    let found = scan(&cx.utt.norms(), cx.lang);
+    if id.is_none() || cx.state.is_null() || expr.is_empty() {
+        expr.merge(found.expr.clone());
+    }
+    if id.is_some() && expr.is_empty() {
+        expr.merge(found.expr);
+    }
+    let items = open(cx);
+    if items.is_empty() {
+        return Reply::done(cx.msg("none", &[]));
+    }
+    let said = cx.utt.norm.clone();
+    let target = id
+        .and_then(|id| items.iter().find(|e| e.id == id).cloned())
+        .or_else(|| items.iter().filter(|e| said.contains(&e.title.to_lowercase())).max_by_key(|e| e.title.len()).cloned())
+        .or_else(|| (items.len() == 1).then(|| items[0].clone()));
+    let Some(target) = target else {
+        if answering {
+            return Reply::failed(cx.msg("not_found", &[]));
+        }
+        cx.ask("move.which", json!({ "time": expr }));
+        return Reply::question(cx.msg("which_move", &[])).with_card(Card::Entries { title: cx.msg("card_title", &[]), items });
+    };
+    let resolved = match resolve(&expr, &cx.now, HalfDay::Nearest) {
+        Ok(r) => r,
+        Err(error) => {
+            let key = match error {
+                TimeError::Past => "time_past",
+                TimeError::Invalid => "time_unclear",
+                TimeError::Missing => "ask_move_time",
+            };
+            cx.ask("move.time", json!({ "id": target.id }));
+            return Reply::question(cx.msg(key, &[("title", &target.title)]));
+        }
+    };
+    let mut moved = target.clone();
+    moved.due_at = Some(resolved.at.as_millisecond());
+    cx.host.unschedule(&moved.id);
+    cx.store.put(moved.clone());
+    let _ = cx.host.schedule(&moved);
+    cx.remember("last", &moved.id);
+    let when = describe(resolved.at, &cx.now, cx.lang, resolved.date_only);
+    Reply::done(cx.msg("moved", &[("title", &moved.title), ("when", &when)])).with_card(Card::Entries { title: cx.msg("card_title", &[]), items: vec![moved] })
+}
+
+/// "Erinnere mich in 10 Minuten nochmal": the reminder that just rang, again later (ten minutes unless said).
+fn snooze(cx: &mut Cx) -> Option<Reply> {
+    const WINDOW_MS: i64 = 30 * 60_000;
+    let found = scan(&cx.utt.norms(), cx.lang);
+    // a sentence that names a new thing to be reminded of is a new reminder
+    let free: Vec<usize> = (0..cx.utt.len()).filter(|i| !found.used[*i]).collect();
+    let title = join(cx.utt, &strip(cx.utt, free, cx.list("drop"), cx.list("lead"), cx.list("trail")));
+    if !title.is_empty() {
+        return Some(create(cx, Draft::default()));
+    }
+    let id = cx.recall("fired", WINDOW_MS).or_else(|| cx.recall("last", WINDOW_MS))?;
+    let entry = cx.store.get(&id)?;
+    let secs = found.expr.relative_secs.unwrap_or(600);
+    let at = cx.now.timestamp().checked_add(jiff::ToSpan::seconds(secs)).ok()?;
+    let mut again = if entry.repeat.is_empty() {
+        entry.clone()
+    } else {
+        // a series keeps its own schedule: the snoozed ring is a one-off copy
+        let mut copy = entry.clone();
+        copy.id = cx.new_id();
+        copy.repeat = String::new();
+        copy
+    };
+    again.due_at = Some(at.as_millisecond());
+    again.pending = true;
+    cx.host.unschedule(&again.id);
+    cx.store.put(again.clone());
+    let _ = cx.host.schedule(&again);
+    let duration = iris_core::time::describe_duration(secs, cx.lang);
+    Some(Reply::done(cx.msg("snoozed", &[("title", &again.title), ("duration", &duration)])))
 }

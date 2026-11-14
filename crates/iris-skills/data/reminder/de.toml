@@ -1,4 +1,12 @@
 [[pattern]]
+intent = "move"
+re = '\b(?:verschieb\w*|schieb\w*|ändere?|verleg\w*|leg\w* um)\b.*\berinnerung\b'
+
+[[pattern]]
+intent = "snooze"
+re = '\bschlummer\w*\b|\b(?:später|nochmal|noch einmal|erneut)\b.*\berinner\w*\b|\berinner\w*\b.*\b(?:nochmal|noch einmal|später|erneut)\b'
+
+[[pattern]]
 intent = "delete"
 re = '\b(?:lösch\w*|entfern\w*|streich\w*)\b.*\berinnerung(?:en)?\b'
 
@@ -23,7 +31,7 @@ to = '${1}${2}'
 # openings that only mean a reminder when a time is named
 weak = ["vergiss nicht"]
 # removed wherever they stand
-drop = ["erinnert werden", "erinnert", "vergiss nicht", "erinnere mich", "erinner mich", "erinnere", "erinner", "erinnern", "erinnerung", "erinnerungen", "sag mir bescheid", "sagst du mir bescheid", "bescheid sagen", "bescheid", "aufgabe"]
+drop = ["nochmal", "noch einmal", "später", "erneut", "schlummern", "erinnert werden", "erinnert", "vergiss nicht", "erinnere mich", "erinner mich", "erinnere", "erinner", "erinnern", "erinnerung", "erinnerungen", "sag mir bescheid", "sagst du mir bescheid", "bescheid sagen", "bescheid", "aufgabe"]
 # removed from the front of the title, again and again
 lead = ["kannst du", "könntest du", "würdest du", "ich möchte", "ich will", "ich muss", "erstelle", "erstell", "stelle", "stell", "lege", "leg", "mache", "mach", "mir", "mich", "eine", "einen", "ein", "neue", "für", "an", "ans", "am", "daran", "dran", "dass ich", "dass", "den", "die", "das", "dem", "zum", "zur", "zu", "und", "oder", "ja", "noch", "dich", "an", "um", "daran"]
 # removed from the end of the title
@@ -32,6 +40,10 @@ all = ["alle", "alles", "sämtliche"]
 next = ["nächste", "nächstes", "als nächstes"]
 
 [messages]
+ask_move_time = "Auf wann soll ich „{title}“ verschieben?"
+which_move = "Welche Erinnerung soll ich verschieben?"
+moved = "Okay, „{title}“ ist auf {when} verschoben."
+snoozed = "Okay, ich erinnere dich in {duration} nochmal an „{title}“."
 ask_time = "Um wie viel Uhr, oder wann soll ich dich erinnern?"
 ask_time_for = "Wann soll ich dich an „{title}“ erinnern?"
 ask_title = "Wie soll die Erinnerung heißen?"

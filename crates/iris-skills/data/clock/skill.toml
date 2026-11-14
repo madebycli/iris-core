@@ -1,0 +1,10 @@
+id = "clock"
+priority = 30
+
+[[intent]]
+id = "time"
+acts = ["time"]
+
+[[intent]]
+id = "date"
+acts = ["date"]

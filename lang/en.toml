@@ -39,7 +39,7 @@ ninety = 90
 [time]
 in_words = ["in"]
 and_words = ["and"]
-clock_markers = ["at", "around", "by"]
+clock_markers = ["at", "around", "by", "for"]
 oclock = ["o'clock", "oclock"]
 half = ["half past"]
 half_means = "after"
@@ -116,6 +116,7 @@ done = ["no", "nope", "that is all", "that's all", "that is it", "that's it", "d
 clock = "{h}:{mm}"
 date = "{m}/{d}"
 weekday_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+month_names = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 list_and = "and"
 
 [messages]

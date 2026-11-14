@@ -10,7 +10,9 @@
 //! @item "Milch" Einkauf          an entry that is already on a list
 //! @tasklist Arbeit               the task app has this list
 //! @tasks down                    the task app cannot be reached
+//! @clock missing                 no clock app / @alarms unconfirmed: the clock app gives no receipt
 //! @advance 90s                   time passes (s, m, h)
+//! @fire Title                    the app reports that the reminder or timer with this title went off
 //! > what the user says
 //! < text the reply must contain  (case does not matter)
 //! <! text the reply must not contain
@@ -18,12 +20,13 @@
 //! = timer "Title" 600s
 //! = task "Title" 2026-11-11T08:00 list=Arbeit
 //! = event "Title" 2026-11-11T08:00
+//! = alarm 2026-11-11T07:00
 //! = item "Milch" list=Einkauf done      (or: open)
 //! = count reminder 1
 //! = kind question                done, question, failed or unhandled
 //! ```
 
-use iris_core::{Capability, Engine, Entry, EntryKind, ExternalEvent, ExternalList, ExternalTask, Host, HostError, MemoryStore, Reply, ReplyKind};
+use iris_core::{AlarmRequest, Capability, Engine, Entry, EntryKind, ExternalEvent, ExternalList, ExternalTask, Host, HostError, MemoryStore, Reply, ReplyKind};
 use jiff::civil::DateTime;
 use jiff::tz::TimeZone;
 use std::collections::HashMap;
@@ -39,6 +42,9 @@ pub struct FakeState {
     pub tasks: Vec<(ExternalTask, String)>,
     pub events: Vec<ExternalEvent>,
     pub scheduled: Vec<String>,
+    pub alarms: Vec<iris_core::AlarmRequest>,
+    pub alarms_unconfirmed: bool,
+    pub clock_missing: bool,
 }
 
 /// A phone that exists only in memory.
@@ -69,6 +75,21 @@ impl Host for FakeHost {
     }
     fn unschedule(&self, id: &str) {
         self.0.lock().unwrap().scheduled.retain(|x| x != id);
+    }
+    fn set_alarm(&self, alarm: &AlarmRequest) -> Result<bool, HostError> {
+        let mut s = self.0.lock().unwrap();
+        if s.clock_missing {
+            return Err(HostError::Unavailable);
+        }
+        s.alarms.push(alarm.clone());
+        Ok(!s.alarms_unconfirmed)
+    }
+    fn next_alarm(&self) -> Option<i64> {
+        let s = self.0.lock().unwrap();
+        s.alarms.iter().map(|a| a.at_ms).filter(|t| *t > s.now_ms).min()
+    }
+    fn show_alarms(&self) -> Result<(), HostError> {
+        if self.0.lock().unwrap().clock_missing { Err(HostError::Unavailable) } else { Ok(()) }
     }
     fn task_lists(&self) -> Result<Vec<ExternalList>, HostError> {
         let s = self.0.lock().unwrap();
@@ -168,6 +189,8 @@ pub fn run_spec(source: &str) -> (usize, Vec<Failure>) {
                     host.lists.push(ExternalList { id, name: value.to_string() });
                 }
                 "tasks" => host.tasks_down = value == "down",
+                "clock" => host.clock_missing = value == "missing",
+                "alarms" => host.alarms_unconfirmed = value == "unconfirmed",
                 "item" => match quoted(value) {
                     Some((title, list)) => {
                         use iris_core::Store;
@@ -178,6 +201,16 @@ pub fn run_spec(source: &str) -> (usize, Vec<Failure>) {
                     }
                     None => fail(format!("bad @item {value:?}")),
                 },
+                "fire" => {
+                    use iris_core::Store;
+                    drop(host);
+                    if let Some(id) = session.store.all(None).into_iter().find(|e| e.title == value).map(|e| e.id) {
+                        session.engine.fired(&id);
+                    } else {
+                        fail(format!("@fire: nothing titled {value:?}"));
+                    }
+                    continue;
+                }
                 "advance" => {
                     let (number, unit) = value.split_at(value.len().saturating_sub(1));
                     let scale = match unit {
@@ -247,6 +280,10 @@ fn verify(check: &str, session: &Session, last: Option<&Reply>) -> Result<(), St
                 other => Err(format!("expected a {rest} reply, got {:?}: {:?}", other.map(|r| r.kind), other.map(|r| r.text.clone()))),
             }
         }
+        "alarms" => {
+            let n: usize = rest.trim().parse().map_err(|_| "alarms needs a number")?;
+            (host.alarms.len() == n).then_some(()).ok_or(format!("expected {n} alarms, found {}", host.alarms.len()))
+        }
         "count" => {
             let (kind, n) = rest.split_once(' ').ok_or("count needs a kind and a number")?;
             let kind = kind_of(kind).ok_or(format!("unknown kind {kind:?}"))?;
@@ -300,6 +337,10 @@ fn verify(check: &str, session: &Session, last: Option<&Reply>) -> Result<(), St
                 }
             }
             Ok(())
+        }
+        "alarm" => {
+            let want = millis(rest.trim(), &zone)?;
+            if host.alarms.iter().any(|a| a.at_ms == want) { Ok(()) } else { Err(format!("no alarm at {rest}: {:?}", host.alarms)) }
         }
         "event" => {
             let (title, rest) = quoted(rest).ok_or("a title in quotes is needed")?;

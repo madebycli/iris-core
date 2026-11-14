@@ -277,3 +277,44 @@
 ## a stray "um" before a relative time (from the phone log)
 > Erinnern mich um in 10 Minuten daran, den Wecker auszumachen
 = reminder "Wecker ausmachen" 2026-11-10T16:10
+
+## move a reminder by name
+> Erinnere mich um 17 Uhr an Oma
+> Verschiebe die Erinnerung Oma auf 18 Uhr
+= reminder "Oma" 2026-11-10T18:00
+= count reminder 1
+
+## move the only reminder without naming it
+> Erinnere mich um 17 Uhr an Oma
+> Verschieb die Erinnerung auf morgen um 9
+= reminder "Oma" 2026-11-11T09:00
+
+## move: which one, when there are two
+> Erinnere mich um 17 Uhr an Oma
+> Erinnere mich um 18 Uhr an Opa
+> Verschiebe die Erinnerung auf 20 Uhr
+= kind question
+> Opa
+= reminder "Opa" 2026-11-10T20:00
+= reminder "Oma" 2026-11-10T17:00
+
+## move: the time is asked
+> Erinnere mich um 17 Uhr an Oma
+> Verschiebe die Erinnerung Oma
+= kind question
+> auf 19 Uhr
+= reminder "Oma" 2026-11-10T19:00
+
+## snooze the reminder that just rang
+> Erinnere mich um 16:30 Uhr an Oma
+@advance 31m
+@fire Oma
+> Erinnere mich in 10 Minuten nochmal
+= reminder "Oma" 2026-11-10T16:41
+
+## snooze without a time: ten minutes
+> Erinnere mich um 16:30 Uhr an Oma
+@advance 31m
+@fire Oma
+> Später erinnern
+= reminder "Oma" 2026-11-10T16:41

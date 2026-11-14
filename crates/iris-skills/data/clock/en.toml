@@ -1,0 +1,12 @@
+[[pattern]]
+intent = "time"
+re = '\bwhat time is it\b|\bwhat is the time\b|\bcurrent time\b|\btell me the time\b|^the time$|\bwhat time do we have\b'
+
+[[pattern]]
+intent = "date"
+re = '\bwhat (?:day|date) is it\b|\btoday s date\b|\bwhat is the date\b|\bwhat day is today\b|\bwhich day is it\b|^the date$'
+
+[messages]
+time = "It is {time}."
+date = "Today is {weekday}, {month} {day}, {year}."
+date_weekday = "Today is {weekday}."

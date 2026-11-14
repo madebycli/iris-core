@@ -1,0 +1,19 @@
+id = "alarm"
+# below reminders: "erinnere mich … den Wecker auszumachen" is a reminder
+priority = 18
+capabilities = ["alarm"]
+
+[[intent]]
+id = "set"
+acts = ["alarm_set"]
+
+[[intent]]
+id = "next"
+acts = ["alarm_next"]
+
+[[intent]]
+id = "list"
+acts = ["alarm_list"]
+
+[[intent]]
+id = "set.time"

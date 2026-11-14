@@ -19,7 +19,7 @@ pub mod time;
 
 pub use engine::{Classifier, Engine, NoClassifier, Prediction};
 pub use entry::{Entry, EntryKind};
-pub use host::{Capability, ExternalEvent, ExternalList, ExternalTask, Host, HostError};
+pub use host::{AlarmRequest, Capability, ExternalEvent, ExternalList, ExternalTask, Host, HostError};
 pub use lang::{LangPack, Messages};
 pub use reply::{Card, Reply, ReplyKind};
 pub use skill::{Cx, Skill, SkillError, Slots};

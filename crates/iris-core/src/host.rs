@@ -17,6 +17,8 @@ pub enum Capability {
     Calendar,
     Http,
     Location,
+    /// Setting and asking for alarms through the device's clock app.
+    Alarm,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,6 +54,14 @@ pub struct ExternalEvent {
     pub repeat: String,
 }
 
+/// An alarm to set: the next time the clock shows `hour:minute`, at `at_ms`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AlarmRequest {
+    pub at_ms: i64,
+    pub hour: u8,
+    pub minute: u8,
+}
+
 pub trait Host: Send + Sync {
     fn now_ms(&self) -> i64;
     /// IANA name of the device's time zone.
@@ -77,6 +87,18 @@ pub trait Host: Send + Sync {
     }
     /// Returns the name of the calendar the event went to.
     fn create_event(&self, _event: &ExternalEvent) -> Result<String, HostError> {
+        Err(HostError::Unavailable)
+    }
+    /// Asks the clock app to set an alarm. `Ok(true)`: the device confirmed it; `Ok(false)`: it was handed over and nothing more is known.
+    fn set_alarm(&self, _alarm: &AlarmRequest) -> Result<bool, HostError> {
+        Err(HostError::Unavailable)
+    }
+    /// The time of the next alarm that will ring, in milliseconds.
+    fn next_alarm(&self) -> Option<i64> {
+        None
+    }
+    /// Opens the clock app's list of alarms.
+    fn show_alarms(&self) -> Result<(), HostError> {
         Err(HostError::Unavailable)
     }
 }

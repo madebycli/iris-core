@@ -298,7 +298,7 @@
 > Füge Döner zu meiner Einkaufsliste hinzu
 > Und erstelle einen Wecker in 10 Minuten
 = count item 1
-= kind unhandled
+= alarm 2026-11-10T16:10
 
 ## a speech-recognition slip in the list word (from the phone log)
 > Hüge Döner zu meiner Einkaufsless hinzu
