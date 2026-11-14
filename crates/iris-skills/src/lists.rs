@@ -147,6 +147,17 @@ fn said_items(cx: &Cx) -> Vec<String> {
             groups.push(Vec::new());
         }
     }
+    // the target of the entry without the word "list": only when the sentence names no list
+    if named(cx).is_none() {
+        if let Some(re) = cx.expr("target") {
+            if let Some(m) = re.find(&cx.utt.norm) {
+                let cut = cx.utt.token_range(m.range());
+                for g in groups.iter_mut() {
+                    g.retain(|i| !cut.contains(i));
+                }
+            }
+        }
+    }
     groups
         .into_iter()
         .map(|g| strip(cx.utt, g, cx.list("drop"), cx.list("lead"), cx.list("trail")))

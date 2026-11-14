@@ -31,6 +31,8 @@ intent = "more"
 re = '^(?:ja )?(?:und noch|und|noch|dazu|außerdem) (?P<rest>.+)$'
 
 [expressions]
+# a target without the word "list", for sentences the network routed ("auf meinen Einkaufskram")
+target = '\b(?:auf|zu|in) (?:meine[nrm]?|die|der|den|dem|unsere[nrm]?) \p{L}+$'
 # the list a sentence names: "Einkaufsliste", "Einkaufszettel", "Liste Spiele"
 list_name = '\bliste (?P<b>\p{L}+)\b|\b(?P<a>\p{L}+?)s?(?:liste|zettel)\b'
 # the whole phrase that names it, to take it out of the entry

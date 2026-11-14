@@ -15,4 +15,5 @@ path = "src/main.rs"
 [dependencies]
 iris-core.workspace = true
 iris-skills.workspace = true
+iris-brain = { path = "../iris-brain" }
 jiff.workspace = true

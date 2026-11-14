@@ -16,6 +16,10 @@ jiff = { version = "0.2", features = ["serde"] }
 iris-core = { path = "crates/iris-core" }
 iris-skills = { path = "crates/iris-skills" }
 
+# no debug info: the network crate pulls in a large dependency tree and the target directory gets big
+[profile.dev]
+debug = false
+
 # dependencies are built optimised in debug builds too: the specs compile many patterns
 [profile.dev.package."*"]
 opt-level = 2

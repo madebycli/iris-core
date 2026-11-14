@@ -68,3 +68,25 @@ fn a_single_reminder_is_finished_when_it_fires() {
     s.engine.fired(&entry.id);
     assert!(!s.store.get(&entry.id).unwrap().pending);
 }
+
+/// What the network routes has no pattern to take the verbs and the list's name out for it.
+#[test]
+fn a_timer_the_network_found_is_named_cleanly() {
+    let mut s = Session::new(NOW, "Europe/Berlin", "de");
+    s.engine.set_classifier(Box::new(Says("timer_set", 0.95)));
+    let reply = s.say("Schalt mir einen Küchenwecker für zehn Minuten ein");
+    assert_eq!(reply.skill, "timer", "{}", reply.text);
+    let timers = s.store.all(Some(EntryKind::Timer));
+    assert_eq!(timers[0].title, "Küchenwecker");
+    assert_eq!(timers[0].duration_ms, 600_000);
+}
+
+#[test]
+fn a_list_entry_the_network_found_loses_the_target_phrase() {
+    let mut s = Session::new(NOW, "Europe/Berlin", "de");
+    s.engine.set_classifier(Box::new(Says("list_add", 0.95)));
+    let reply = s.say("Setz mal Eier auf meinen Einkaufskram");
+    assert_eq!(reply.skill, "lists", "{}", reply.text);
+    let items = s.store.all(Some(EntryKind::ListItem));
+    assert_eq!(items.iter().map(|e| e.title.as_str()).collect::<Vec<_>>(), ["Eier"]);
+}

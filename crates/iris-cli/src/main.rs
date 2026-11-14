@@ -1,5 +1,6 @@
 //! `iris "erinnere mich um fünf an den Hund"` answers once; without a sentence it reads one per line.
 //! `iris spec <files>` runs conversation specs.
+//! `--brain <dir>` (or IRIS_BRAIN_DIR) plugs in the trained network: a directory with brain.onnx, meta.txt, pieces.tsv.
 
 use iris_cli::{run_spec, Session};
 use std::io::BufRead;
@@ -24,8 +25,19 @@ fn main() {
         lang = args.get(i + 1).cloned().unwrap_or(lang);
         args.drain(i..(i + 2).min(args.len()));
     }
+    let mut brain_dir = std::env::var("IRIS_BRAIN_DIR").ok();
+    if let Some(i) = args.iter().position(|a| a == "--brain") {
+        brain_dir = args.get(i + 1).cloned();
+        args.drain(i..(i + 2).min(args.len()));
+    }
     let now = jiff::Zoned::now();
     let mut session = Session::new(now.timestamp().as_millisecond(), now.time_zone().iana_name().unwrap_or("UTC"), &lang);
+    if let Some(dir) = brain_dir {
+        match iris_brain::Brain::load(std::path::Path::new(&dir)) {
+            Ok(brain) => session.engine.set_classifier(Box::new(brain)),
+            Err(e) => eprintln!("the network could not be loaded from {dir}: {e}"),
+        }
+    }
     let host = session.host.clone();
     let mut answer = |text: &str| {
         let reply = session.say(text);

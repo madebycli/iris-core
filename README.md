@@ -5,6 +5,7 @@ utterance goes in, one reply comes out. No UI and no platform code: the device i
 through the `Host` and `Store` traits, so the whole assistant runs and is tested on a desktop.
 
 - **Skills today:** timers, reminders, lists, notes. German and English.
+- **The network:** `crates/iris-brain` runs the trained MiniLM in pure Rust (tract), no native library. Model files are not in this repository.
 - **Language is data:** every word the engine knows lives in `lang/<code>.toml` and
   `crates/iris-skills/data/<skill>/<code>.toml`, never in Rust code.
 - **Status:** the Android app uses it behind an experimental switch. Nothing else is moved yet;

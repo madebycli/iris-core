@@ -31,6 +31,8 @@ intent = "more"
 re = '^(?:yes )?(?:and also|and|also|plus) (?P<rest>.+)$'
 
 [expressions]
+# a target without the word "list", for sentences the network routed ("auf meinen Einkaufskram")
+target = '\b(?:to|on|onto|in) (?:my|the|our) \p{L}+$'
 list_name = '\b(?P<a>\p{L}+) list\b'
 list_phrase = '\b(?:(?:to|on|onto|from|off|in) )?(?:(?:my|the|our) )?\p{L}+ list\b'
 
