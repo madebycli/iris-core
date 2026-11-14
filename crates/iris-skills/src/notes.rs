@@ -55,7 +55,6 @@ fn remove(cx: &mut Cx, answering: bool) -> Reply {
     if notes.is_empty() {
         return Reply::done(cx.msg("none", &[]));
     }
-    let said = cx.utt.norm.clone();
     if cx.utt.tokens.iter().any(|t| cx.list("all").contains(&t.norm)) {
         cx.ask("clear.confirm", json!({}));
         return Reply::question(cx.messages.plural("confirm_all", notes.len() as i64, &[]));
