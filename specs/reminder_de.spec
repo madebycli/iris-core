@@ -318,3 +318,15 @@
 @fire Oma
 > Später erinnern
 = reminder "Oma" 2026-11-10T16:41
+
+
+## undo takes back a reminder, and its alarm
+> Erinnere mich um 17 Uhr an Oma
+> Rückgängig
+= count reminder 0
+
+## undo of a deleted reminder
+> Erinnere mich um 17 Uhr an Oma
+> Lösche die Erinnerung Oma
+> Rückgängig
+= reminder "Oma" 2026-11-10T17:00

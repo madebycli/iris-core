@@ -113,6 +113,8 @@ pub struct RepeatWords {
 pub struct DialogWords {
     pub fillers: Vec<String>,
     pub cancel: Vec<String>,
+    #[serde(default)]
+    pub undo: Vec<String>,
     pub yes: Vec<String>,
     pub no: Vec<String>,
     pub done: Vec<String>,
@@ -124,6 +126,9 @@ impl DialogWords {
     }
     pub fn is_cancel(&self, text: &str) -> bool {
         Self::is(&self.cancel, text)
+    }
+    pub fn is_undo(&self, text: &str) -> bool {
+        Self::is(&self.undo, text)
     }
     pub fn is_yes(&self, text: &str) -> bool {
         Self::is(&self.yes, text)

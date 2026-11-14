@@ -1,10 +1,14 @@
 [[pattern]]
-intent = "clear"
-re = '\b(?:delete|clear|remove|empty)\b.*\b(?:everything|all)\b|\b(?:clear|empty)\b.*\blist\b'
+intent = "buy"
+re = '^i need to buy (?P<rest>.+)$'
 
 [[pattern]]
 intent = "check_all"
 re = '\b(?:check|tick|cross)\b.*\b(?:everything|all)\b.*\boff\b'
+
+[[pattern]]
+intent = "clear"
+re = '\b(?:delete|clear|remove|empty)\b.*\b(?:everything|all)\b|\b(?:clear|empty)\b.*\blist\b'
 
 [[pattern]]
 intent = "check"

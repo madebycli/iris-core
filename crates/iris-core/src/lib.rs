@@ -23,5 +23,5 @@ pub use host::{AlarmRequest, Capability, ExternalEvent, ExternalList, ExternalTa
 pub use lang::{LangPack, Messages};
 pub use reply::{Card, Reply, ReplyKind};
 pub use skill::{Cx, Skill, SkillError, Slots};
-pub use store::{MemoryStore, Store};
+pub use store::{MemoryStore, RecordingStore, Store};
 pub use text::Utterance;

@@ -30,8 +30,10 @@
 = item "Milch" list=Einkauf
 = count item 1
 
-## add 7
+## add 7 (no list named: asks)
 > Vergiss nicht Milch auf die Liste zu setzen
+< Auf welche Liste
+> Einkaufsliste
 = item "Milch" list=Einkauf
 = count item 1
 
@@ -50,8 +52,10 @@
 = item "Milch" list=Einkauf
 = count item 1
 
-## add 11
+## add 11 (no list named: asks)
 > Setz Milch auf die Liste
+< Auf welche Liste
+> Einkaufsliste
 = item "Milch" list=Einkauf
 = count item 1
 
@@ -310,3 +314,56 @@
 > Und Brawl Stars Robots
 = item "Fortnite Skins" list=Einkauf
 = item "Brawl Stars Robots" list=Einkauf
+
+
+## a list-less entry asks which list, and "cancel" ends it
+> Setze Hund auf die Liste
+< Auf welche Liste
+= kind question
+> Abbrechen
+= count item 0
+
+## "doch nicht" cancels, although "doch" is a filler word
+> Neue Notiz
+> Doch nicht
+= count note 0
+
+## ticking all, with a polite word and a "delete" in the sentence
+@item "Milch" Einkauf
+@item "Brot" Einkauf
+> Hake, bitte, lösche alles auf der Liste Einkauf ab
+= item "Milch" done
+= item "Brot" done
+
+## ticking all entries without naming the list
+@item "Milch" Einkauf
+@item "Brot" Einkauf
+> Hake alle Einträge ab
+= item "Milch" done
+= item "Brot" done
+
+## undo takes back the last change
+> Füge Milch zur Einkaufsliste hinzu
+> Rückgängig
+= count item 0
+
+## undo of a deletion puts the entry back
+@item "Milch" Einkauf
+> Lösche Milch
+= count item 0
+> Mach das rückgängig
+= item "Milch" open
+
+## undo of a tick
+@item "Milch" Einkauf
+> Hake Milch ab
+> Rückgängig
+= item "Milch" open
+
+## nothing to undo
+> Rückgängig
+< nichts
+
+## "I must buy milk" needs no list: it is the shopping list
+> Ich muss Milch kaufen
+= item "Milch" list=Einkauf

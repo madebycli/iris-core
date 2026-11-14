@@ -93,3 +93,9 @@
 ## the clock time is not the name
 > Stelle einen Timer für Nudeln bis 17 Uhr
 = timer "Nudeln" 2026-11-10T17:00
+
+
+## undo takes back a timer
+> Timer für 5 Minuten
+> Rückgängig
+= count timer 0

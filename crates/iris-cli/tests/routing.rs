@@ -87,6 +87,9 @@ fn a_list_entry_the_network_found_loses_the_target_phrase() {
     s.engine.set_classifier(Box::new(Says("list_add", 0.95)));
     let reply = s.say("Setz mal Eier auf meinen Einkaufskram");
     assert_eq!(reply.skill, "lists", "{}", reply.text);
+    // no list is named in the sentence, so the user is asked which one
+    assert_eq!(reply.kind, ReplyKind::Question, "{}", reply.text);
+    s.say("Einkauf");
     let items = s.store.all(Some(EntryKind::ListItem));
     assert_eq!(items.iter().map(|e| e.title.as_str()).collect::<Vec<_>>(), ["Eier"]);
 }

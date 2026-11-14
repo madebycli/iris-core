@@ -30,6 +30,11 @@ impl Skill for Lists {
         let state_list = cx.state["list"].as_str().map(str::to_string);
         match intent {
             "add" => Some(add(cx, None, false)),
+            // "Ich muss Milch kaufen": the shopping list, without asking
+            "buy" => {
+                let list = cx.table("defaults", "list").map(str::to_string);
+                Some(add(cx, list, false))
+            }
             "more" => {
                 // "und erstelle einen Wecker …" is a new command, not one more entry
                 let rest = cx.span("rest");
@@ -45,6 +50,11 @@ impl Skill for Lists {
             }
             "add.list" => {
                 let list = named(cx).or_else(|| cx.utt.tokens.last().map(|t| canonical(cx, &t.norm)))?;
+                // the entries said before the question are put on the list that was just named
+                let kept: Vec<String> = cx.state["items"].as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default();
+                if !kept.is_empty() {
+                    return Some(add_items(cx, Some(list), false, kept));
+                }
                 cx.ask("add.items", json!({ "list": list }));
                 Some(Reply::question(cx.msg("ask_items", &[("list", &list)])))
             }
@@ -109,8 +119,8 @@ fn implied(cx: &Cx) -> Option<String> {
         return Some(recent);
     }
     let all = collections(cx);
+    // exactly one list: that one. Otherwise the user is asked ("Auf welche Liste?").
     match all.len() {
-        0 => cx.table("defaults", "list").map(str::to_string),
         1 => all.into_iter().next(),
         _ => None,
     }
@@ -180,13 +190,18 @@ fn looks_like_a_new_sentence(cx: &Cx) -> bool {
 
 fn add(cx: &mut Cx, list: Option<String>, guided: bool) -> Reply {
     let items = said_items(cx);
+    add_items(cx, list, guided, items)
+}
+
+/// The entries are known (said in this sentence, or kept from the one that asked "which list?").
+fn add_items(cx: &mut Cx, list: Option<String>, guided: bool, items: Vec<String>) -> Reply {
     if guided && items.is_empty() && cx.lang.dialog.is_yes(&cx.utt.norm) {
         let list = list.unwrap_or_default();
         cx.ask("add.items", json!({ "list": list }));
         return Reply::question(cx.msg("ask_items", &[("list", &list)]));
     }
     let Some(list) = list.or_else(|| named(cx)).or_else(|| implied(cx)) else {
-        cx.ask("add.list", json!({}));
+        cx.ask("add.list", json!({ "items": items }));
         return Reply::question(cx.msg("ask_list", &[]));
     };
     if items.is_empty() {

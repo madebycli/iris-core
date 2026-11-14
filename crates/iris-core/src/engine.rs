@@ -12,7 +12,7 @@ use crate::host::Host;
 use crate::lang::{LangPack, Messages};
 use crate::reply::{Reply, ReplyKind};
 use crate::skill::{Cx, Manifest, Pattern, Skill, SkillError, SkillLanguage, Slots};
-use crate::store::Store;
+use crate::store::{RecordingStore, Store};
 use crate::text::Utterance;
 use crate::time::next_occurrence;
 use jiff::tz::TimeZone;
@@ -70,10 +70,14 @@ pub struct Engine {
     store: Arc<dyn Store>,
     classifier: Box<dyn Classifier>,
     pending: Option<Pending>,
+    /// What the last change touched, as it was before, and when: "rückgängig" restores it.
+    undo: Option<(i64, Vec<(String, Option<crate::entry::Entry>)>)>,
     memory: HashMap<String, (String, i64)>,
     ids: u64,
     /// Below this the classifier's answer is not acted on.
     pub cutoff: f32,
+    /// How long a change can be taken back.
+    pub undo_ttl_ms: i64,
     /// How long a question waits for its answer.
     pub question_ttl_ms: i64,
 }
@@ -81,7 +85,7 @@ pub struct Engine {
 impl Engine {
     pub fn new(host: Arc<dyn Host>, store: Arc<dyn Store>) -> Self {
         let langs = LangPack::builtin().into_iter().map(|p| (p.code.clone(), Arc::new(p))).collect();
-        Self { langs, skills: Vec::new(), host, store, classifier: Box::new(NoClassifier), pending: None, memory: HashMap::new(), ids: 0, cutoff: 0.60, question_ttl_ms: 120_000 }
+        Self { langs, skills: Vec::new(), host, store, classifier: Box::new(NoClassifier), pending: None, undo: None, memory: HashMap::new(), ids: 0, cutoff: 0.60, question_ttl_ms: 120_000, undo_ttl_ms: 600_000 }
     }
 
     pub fn add_language(&mut self, pack: LangPack) {
@@ -147,10 +151,23 @@ impl Engine {
             return unhandled();
         }
         let now_ms = self.host.now_ms();
+        let raw_words = {
+            let w = Utterance::words(text);
+            w.join(" ")
+        };
+        // 0. taking the last change back works everywhere, also in the middle of a question
+        if lang.dialog.is_undo(&raw_words) || lang.dialog.is_undo(&utt.norm) {
+            self.pending = None;
+            let mut r = self.take_back(&lang, now_ms);
+            r.skill = "core".into();
+            r.intent = "undo".into();
+            return r;
+        }
         // 1. an open question
         if let Some(p) = self.pending.take() {
             if now_ms - p.at_ms <= self.question_ttl_ms {
-                if lang.dialog.is_cancel(&utt.norm) {
+                // "doch nicht" cancels, although "doch" is a filler that the utterance dropped
+                if lang.dialog.is_cancel(&utt.norm) || lang.dialog.is_cancel(&raw_words) {
                     let mut r = Reply::done(lang.messages.get("cancelled", &[]));
                     r.skill = "core".into();
                     r.intent = "cancel".into();
@@ -199,15 +216,45 @@ impl Engine {
         let now_ms = self.host.now_ms();
         let tz = TimeZone::get(&self.host.zone()).unwrap_or(TimeZone::UTC);
         let now = Timestamp::from_millisecond(now_ms).unwrap_or(Timestamp::UNIX_EPOCH).to_zoned(tz);
-        let mut cx = Cx { utt, slots, lang, messages: &loaded.messages, words: &loaded.words, expressions: &loaded.expressions, rewrites: &loaded.rewrites, tables: &loaded.tables, memory: &mut self.memory, skill_id: &reg.manifest.id, host: self.host.as_ref(), store: self.store.as_ref(), now, state, ask: None, ids: &mut self.ids };
-        let mut reply = reg.skill.handle(intent, &mut cx)?;
+        let recording = RecordingStore::new(self.store.as_ref());
+        let mut cx = Cx { utt, slots, lang, messages: &loaded.messages, words: &loaded.words, expressions: &loaded.expressions, rewrites: &loaded.rewrites, tables: &loaded.tables, memory: &mut self.memory, skill_id: &reg.manifest.id, host: self.host.as_ref(), store: &recording, now, state, ask: None, ids: &mut self.ids };
+        let handled = reg.skill.handle(intent, &mut cx);
+        let asked = cx.ask.take();
+        drop(cx);
+        let journal = recording.into_journal();
+        let mut reply = handled?;
         reply.skill = reg.manifest.id.clone();
         reply.intent = intent.to_string();
-        if let Some((next, state)) = cx.ask.take() {
+        if !journal.is_empty() {
+            self.undo = Some((now_ms, journal));
+        }
+        if let Some((next, state)) = asked {
             reply.kind = ReplyKind::Question;
             self.pending = Some(Pending { skill: index, intent: next, state, at_ms: now_ms });
         }
         Some(reply)
+    }
+
+    fn take_back(&mut self, lang: &LangPack, now_ms: i64) -> Reply {
+        let Some((at, journal)) = self.undo.take().filter(|(at, _)| now_ms - at <= self.undo_ttl_ms) else {
+            return Reply::done(lang.messages.get("nothing_to_undo", &[]));
+        };
+        let _ = at;
+        for (id, before) in journal.into_iter().rev() {
+            self.host.unschedule(&id);
+            match before {
+                Some(entry) => {
+                    if entry.pending && entry.due_at.is_some() && matches!(entry.kind, EntryKind::Reminder | EntryKind::Timer) {
+                        let _ = self.host.schedule(&entry);
+                    }
+                    self.store.put(entry);
+                }
+                None => {
+                    self.store.delete(&id);
+                }
+            }
+        }
+        Reply::done(lang.messages.get("undone", &[]))
     }
 
     /// The app reports that a reminder or timer went off. A repeating entry is planned again; the others are finished.

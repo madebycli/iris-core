@@ -108,6 +108,7 @@ weekly = ["weekly", "every week"]
 [dialog]
 fillers = ["please", "um", "uh", "hey", "iris", "just"]
 cancel = ["cancel", "stop", "never mind", "nevermind", "forget it", "abort", "no thanks", "leave it"]
+undo = ["undo", "undo that", "undo it", "take that back", "revert that", "take it back"]
 yes = ["yes", "yeah", "yep", "sure", "ok", "okay", "do it", "right", "correct"]
 no = ["no", "nope", "do not", "wrong"]
 done = ["no", "nope", "that is all", "that's all", "that is it", "that's it", "done", "nothing", "nothing else", "thanks", "no thanks", "enough"]
@@ -120,6 +121,8 @@ month_names = ["January", "February", "March", "April", "May", "June", "July", "
 list_and = "and"
 
 [messages]
+undone = "Okay, undone."
+nothing_to_undo = "There is nothing to undo."
 cancelled = "Okay, cancelled."
 not_understood = "I did not understand that."
 "when.today" = "today at {time}"

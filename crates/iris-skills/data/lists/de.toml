@@ -1,10 +1,14 @@
 [[pattern]]
-intent = "clear"
-re = '\b(?:lösch\w*|leer\w*|entfern\w*|räum\w*)\b.*\b(?:alles|alle|komplett)\b|\bleer\w*\b.*\b\p{L}*liste\b'
+intent = "buy"
+re = '^ich muss (?P<rest>.+) kaufen$'
 
 [[pattern]]
 intent = "check_all"
 re = '\bha[ck]\w*\b.*\b(?:alles|alle)\b.*\bab$|\balles?\b.*\babhaken$'
+
+[[pattern]]
+intent = "clear"
+re = '\b(?:lösch\w*|leer\w*|entfern\w*|räum\w*)\b.*\b(?:alles|alle|komplett)\b|\bleer\w*\b.*\b\p{L}*liste\b'
 
 [[pattern]]
 intent = "check"
@@ -24,7 +28,7 @@ re = '\b(?:neuen?|erstell\w*)\b.*\beintrag\b'
 
 [[pattern]]
 intent = "add"
-re = '\b\p{L}*(?:liste|zettel)\b|^ich muss (?P<rest>.+) kaufen$'
+re = '\b\p{L}*(?:liste|zettel)\b'
 
 [[pattern]]
 intent = "more"

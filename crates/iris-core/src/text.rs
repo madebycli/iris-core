@@ -54,6 +54,11 @@ impl Utterance {
         Self { raw: raw.to_string(), tokens, norm, starts }
     }
 
+    /// The words of a text as typed: lower case, punctuation off the edges, nothing dropped.
+    pub fn words(raw: &str) -> Vec<String> {
+        raw.split_whitespace().map(|p| p.trim_matches(EDGE).to_lowercase()).filter(|w| !w.is_empty()).collect()
+    }
+
     pub fn norms(&self) -> Vec<&str> {
         self.tokens.iter().map(|t| t.norm.as_str()).collect()
     }

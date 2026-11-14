@@ -120,6 +120,7 @@ weekly = ["wöchentlich", "jede woche"]
 [dialog]
 fillers = ["bitte", "mal", "ähm", "äh", "hm", "doch", "eben", "halt", "iris"]
 cancel = ["abbrechen", "abbruch", "stopp", "stop", "vergiss es", "lass gut sein", "nein danke", "doch nicht", "brich ab", "egal", "schon gut", "lass es"]
+undo = ["rückgängig", "mach das rückgängig", "mach es rückgängig", "mach rückgängig", "das rückgängig machen", "nimm das zurück", "nimm es zurück", "widerrufe das", "zurücknehmen"]
 yes = ["ja", "jo", "jep", "klar", "genau", "mach das", "ja bitte", "okay", "ok", "richtig", "stimmt"]
 no = ["nein", "nö", "ne", "nicht", "lieber nicht", "falsch"]
 done = ["nein", "nö", "das war's", "das wars", "das war alles", "reicht", "das reicht", "fertig", "nichts mehr", "nichts", "danke", "nein danke", "passt"]
@@ -141,6 +142,8 @@ month_names = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "Au
 list_and = "und"
 
 [messages]
+undone = "Okay, rückgängig gemacht."
+nothing_to_undo = "Es gibt nichts zum Rückgängigmachen."
 cancelled = "Okay, abgebrochen."
 not_understood = "Das habe ich nicht verstanden."
 "when.today" = "heute um {time}"
