@@ -191,3 +191,8 @@
 > zehn Minuten
 > Egal
 = timer "Timer" 600s
+
+## homework is the school's, not a list entry
+> Ich habe meine Hausaufgaben für heute schon erledigt, hake sie ab
+< abhaken
+= count item 0

@@ -53,6 +53,7 @@ groceries = "Shopping"
 list = "Shopping"
 
 [words]
+school = ["homework"]
 sentence_start = ["what", "which", "when", "who", "where", "how", "show", "read", "can", "could", "set", "remind", "delete", "remove", "check"]
 list_stop = ["my", "the", "a", "our", "this", "that", "new"]
 drop = ["can you", "could you", "do not forget", "i need", "please"]
@@ -66,6 +67,7 @@ today = ["today", "from today", "today's"]
 verbs = ["delete", "remove", "take", "check", "tick", "cross", "off", "is done", "are done", "from", "the", "my"]
 
 [messages]
+school_items = "Homework comes from the school's timetable, I cannot tick it off."
 card_title = "Lists"
 read_all_line = "{list}: {items}."
 "added.one" = "{items} is on the {list} list."

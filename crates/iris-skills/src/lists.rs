@@ -259,6 +259,10 @@ fn mark(cx: &mut Cx, done: bool) -> Option<Reply> {
     let said = format!(" {} ", cx.utt.norm);
     let mut hits: Vec<Entry> = open(cx).into_iter().filter(|e| list.as_ref().is_none_or(|l| *l == e.collection)).filter(|e| said.contains(&format!(" {} ", e.title.to_lowercase()))).collect();
     if hits.is_empty() {
+        // homework comes from the school's timetable app: it is not Iris' to tick off
+        if cx.utt.tokens.iter().any(|t| cx.list("school").contains(&t.norm)) {
+            return Some(Reply::failed(cx.msg("school_items", &[])));
+        }
         return refers_to_a_list(cx).then(|| Reply::failed(cx.msg("not_found", &[])));
     }
     // the same name on two lists: the recent list decides
