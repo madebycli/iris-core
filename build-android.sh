@@ -12,4 +12,7 @@ cargo ndk -t arm64-v8a -o "$app/jniLibs" build -p iris-ffi --release
 cargo build -p iris-ffi
 cargo run -q -p iris-ffi --features cli --bin uniffi-bindgen -- generate \
   --library target/debug/libiris_ffi.so --language kotlin --no-format --out-dir "$app/java"
+# The trained network is part of this repository (models/brain); the app ships a copy in its assets.
+mkdir -p "$app/assets/brain"
+cp models/brain/brain.onnx models/brain/meta.txt models/brain/pieces.tsv "$app/assets/brain/"
 echo "core built: $(wc -c < "$app/jniLibs/arm64-v8a/libiris_ffi.so") bytes"

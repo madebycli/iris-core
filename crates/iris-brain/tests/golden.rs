@@ -1,17 +1,19 @@
-//! The Rust network must give what the Kotlin one gives. The model files are not in the repository:
-//! point `IRIS_BRAIN_DIR` at a directory holding brain.onnx, meta.txt and pieces.tsv
-//! (in the Iris app: app/src/main/assets/brain). Without it the test says so and passes.
+//! The Rust network must give what the Kotlin one gives. The model is `models/brain` in this repository;
+//! `IRIS_BRAIN_DIR` points at another directory with brain.onnx, meta.txt and pieces.tsv. Without a model the test says so and passes.
 
 use iris_brain::{Brain, Context, Tokenizer};
 use std::path::PathBuf;
 
 #[test]
 fn matches_the_kotlin_runtime() {
-    let Ok(dir) = std::env::var("IRIS_BRAIN_DIR") else {
-        eprintln!("IRIS_BRAIN_DIR is not set: golden test skipped");
-        return;
+    let dir = match std::env::var("IRIS_BRAIN_DIR") {
+        Ok(dir) => PathBuf::from(dir),
+        Err(_) => PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../models/brain")),
     };
-    let dir = PathBuf::from(dir);
+    if !dir.join("brain.onnx").exists() {
+        eprintln!("no network in {}: golden test skipped", dir.display());
+        return;
+    }
     let tok = Tokenizer::parse(&std::fs::read_to_string(dir.join("pieces.tsv")).unwrap());
     let brain = Brain::load(&dir).unwrap();
     let golden = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden.tsv")).unwrap();

@@ -23,6 +23,14 @@ specs/               conversations that must hold (`cargo test`)
 docs/                architecture, roadmap, decisions (adr/)
 ```
 
+
+## The trained network
+
+`models/brain/` holds the network the app uses: `brain.onnx` (int8 ONNX, about 23 MB), `meta.txt` (label sets and output offsets) and
+`pieces.tsv` (the tokenizer table). The app's build copies them into its assets (`build-android.sh`); the golden test in
+`crates/iris-brain/tests/golden.rs` checks that this network gives what the Kotlin runtime gave. To use another network, set
+`IRIS_BRAIN_DIR` to its directory.
+
 ## Try it
 
 ```bash
