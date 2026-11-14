@@ -116,15 +116,18 @@ impl Host for FakeHost {
 
 pub struct Session {
     pub host: Arc<FakeHost>,
-    pub store: Arc<MemoryStore>,
+    pub store: Arc<dyn iris_core::Store>,
     pub engine: Engine,
     pub lang: String,
 }
 
 impl Session {
     pub fn new(now_ms: i64, zone: &str, lang: &str) -> Self {
+        Self::with_store(now_ms, zone, lang, Arc::new(MemoryStore::new()))
+    }
+
+    pub fn with_store(now_ms: i64, zone: &str, lang: &str, store: Arc<dyn iris_core::Store>) -> Self {
         let host = Arc::new(FakeHost::new(now_ms, zone));
-        let store = Arc::new(MemoryStore::new());
         let engine = iris_skills::engine(host.clone(), store.clone()).expect("built-in skills are valid");
         Self { host, store, engine, lang: lang.to_string() }
     }

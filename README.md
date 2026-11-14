@@ -4,7 +4,7 @@ The engine of [Iris](https://github.com/madebycli/iris), an offline-first voice 
 utterance goes in, one reply comes out. No UI and no platform code: the device is reached
 through the `Host` and `Store` traits, so the whole assistant runs and is tested on a desktop.
 
-- **Skills today:** timers, reminders, lists, notes. German and English.
+- **Skills today:** timers, reminders, lists, notes, alarms, time and date. German and English.
 - **The network:** `crates/iris-brain` runs the trained MiniLM in pure Rust (tract), no native library. Model files are not in this repository.
 - **Language is data:** every word the engine knows lives in `lang/<code>.toml` and
   `crates/iris-skills/data/<skill>/<code>.toml`, never in Rust code.
@@ -14,6 +14,8 @@ through the `Host` and `Store` traits, so the whole assistant runs and is tested
 ```
 crates/iris-core     pipeline, language packs, time expressions, Skill / Host / Store contracts
 crates/iris-skills   the built-in skills (Rust for logic, TOML for words)
+crates/iris-brain    the trained network in pure Rust (tract)
+crates/iris-store    SQLite store (desktop, station, watch)
 crates/iris-ffi      UniFFI boundary for frontends (Kotlin bindings)
 crates/iris-cli      `iris` in a terminal, a fake phone, the spec runner
 lang/                language packs

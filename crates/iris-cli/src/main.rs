@@ -1,5 +1,6 @@
 //! `iris "erinnere mich um fünf an den Hund"` answers once; without a sentence it reads one per line.
 //! `iris spec <files>` runs conversation specs.
+//! `--db <file>` (or IRIS_DB) keeps entries in a SQLite file between runs.
 //! `--brain <dir>` (or IRIS_BRAIN_DIR) plugs in the trained network: a directory with brain.onnx, meta.txt, pieces.tsv.
 
 use iris_cli::{run_spec, Session};
@@ -30,8 +31,17 @@ fn main() {
         brain_dir = args.get(i + 1).cloned();
         args.drain(i..(i + 2).min(args.len()));
     }
+    let mut db = std::env::var("IRIS_DB").ok();
+    if let Some(i) = args.iter().position(|a| a == "--db") {
+        db = args.get(i + 1).cloned();
+        args.drain(i..(i + 2).min(args.len()));
+    }
     let now = jiff::Zoned::now();
-    let mut session = Session::new(now.timestamp().as_millisecond(), now.time_zone().iana_name().unwrap_or("UTC"), &lang);
+    let store: std::sync::Arc<dyn iris_core::Store> = match db {
+        Some(path) => std::sync::Arc::new(iris_store::SqliteStore::open(std::path::Path::new(&path)).expect("the database could not be opened")),
+        None => std::sync::Arc::new(iris_core::MemoryStore::new()),
+    };
+    let mut session = Session::with_store(now.timestamp().as_millisecond(), now.time_zone().iana_name().unwrap_or("UTC"), &lang, store);
     if let Some(dir) = brain_dir {
         match iris_brain::Brain::load(std::path::Path::new(&dir)) {
             Ok(brain) => session.engine.set_classifier(Box::new(brain)),

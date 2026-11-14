@@ -1,0 +1,10 @@
+[package]
+name = "iris-store"
+description = "A SQLite Store for the Iris core: for desktops, stations and watches. Android uses the app's own database."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+iris-core.workspace = true
+rusqlite = { version = "0.32", features = ["bundled"] }
