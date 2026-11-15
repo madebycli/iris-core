@@ -69,6 +69,8 @@ pub trait Find {
     /// Every match replaced by `with` (literal).
     fn sub(&self, text: &str, with: &str) -> String;
     fn sub_with(&self, text: &str, f: &dyn Fn(&Caps) -> String) -> String;
+    /// The pieces between the matches, empty ones included (Kotlin's `split(Regex)`).
+    fn split_all<'t>(&self, text: &'t str) -> Vec<&'t str>;
 }
 
 impl Find for Regex {
@@ -97,6 +99,17 @@ impl Find for Regex {
             last = m.end();
         }
         out.push_str(&text[last..]);
+        out
+    }
+    fn split_all<'t>(&self, text: &'t str) -> Vec<&'t str> {
+        let mut out = Vec::new();
+        let mut last = 0;
+        for c in self.found_all(text) {
+            let m = c.get(0).unwrap();
+            out.push(&text[last..m.start()]);
+            last = m.end();
+        }
+        out.push(&text[last..]);
         out
     }
 }

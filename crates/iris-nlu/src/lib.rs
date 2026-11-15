@@ -5,10 +5,18 @@
 //! Ported from the Android app, where these were Kotlin. The patterns keep their wording; they run with
 //! Unicode semantics, as they did on the phone (ICU), not as on a desktop JVM.
 
+pub mod anime;
+pub mod clarify;
 pub mod date;
 pub mod duration;
+pub mod fallback;
+pub mod intent;
+pub mod language;
 pub mod normalize;
+pub mod place;
 pub mod re;
+pub mod router;
+pub mod slots;
 pub mod time;
 
 pub use normalize::normalize;

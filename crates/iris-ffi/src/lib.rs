@@ -11,6 +11,8 @@ use std::sync::{Arc, Mutex};
 
 uniffi::setup_scaffolding!();
 
+mod nlu;
+
 /// What the device offers the core. Implemented by the app.
 #[uniffi::export(callback_interface)]
 pub trait Phone: Send + Sync {

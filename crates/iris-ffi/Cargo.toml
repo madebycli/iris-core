@@ -21,6 +21,8 @@ cli = ["uniffi/cli"]
 iris-core.workspace = true
 iris-skills.workspace = true
 iris-brain = { path = "../iris-brain" }
+iris-nlu = { path = "../iris-nlu" }
+jiff.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 uniffi = "0.29"

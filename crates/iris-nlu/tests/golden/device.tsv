@@ -1,0 +1,29 @@
+# Cases where the phone (Android ICU, Unicode \b and (?i)) answers differently from the desktop JVM that wrote the Kotlin reference.
+# what	input	why
+clean	ähm also	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+call	ähm also	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+destination	ähm also	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+app	ähm also	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+search	ähm also	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+fact	ähm also	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+task	ähm also	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+anime	ähm also	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+polite	ähm also	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+clean	Ähm, setze Milch auf die Einkaufsliste	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+call	Ähm, setze Milch auf die Einkaufsliste	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+destination	Ähm, setze Milch auf die Einkaufsliste	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+app	Ähm, setze Milch auf die Einkaufsliste	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+search	Ähm, setze Milch auf die Einkaufsliste	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+fact	Ähm, setze Milch auf die Einkaufsliste	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+task	Ähm, setze Milch auf die Einkaufsliste	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+anime	Ähm, setze Milch auf die Einkaufsliste	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+polite	Ähm, setze Milch auf die Einkaufsliste	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+clean	uh ähm kannst du bitte das Wetter sagen	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+call	uh ähm kannst du bitte das Wetter sagen	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+destination	uh ähm kannst du bitte das Wetter sagen	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+app	uh ähm kannst du bitte das Wetter sagen	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+search	uh ähm kannst du bitte das Wetter sagen	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+fact	uh ähm kannst du bitte das Wetter sagen	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+task	uh ähm kannst du bitte das Wetter sagen	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+anime	uh ähm kannst du bitte das Wetter sagen	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
+polite	uh ähm kannst du bitte das Wetter sagen	filler äh/ähm at a word start: the JVM's ASCII \b sees no boundary before ä, the phone's ICU (and Rust) does, so the filler goes as it did on the phone
