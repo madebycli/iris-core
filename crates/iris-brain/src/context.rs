@@ -123,3 +123,32 @@ impl Context {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Context;
+
+    #[test]
+    fn an_empty_conversation_is_nothing_yet() {
+        assert_eq!(Context::empty().compose(), "nothing yet");
+    }
+
+    #[test]
+    fn names_the_last_function_the_list_on_screen_with_its_focus_and_what_iris_waits_for() {
+        let c = Context { last: "school_next_lesson".into(), shown: "lesson".into(), titles: vec!["Mathe".into(), "Englisch".into()], focus: 0, expect: "slot".into(), slot: "time".into(), ..Context::empty() };
+        assert_eq!(c.compose(), "last: next lesson; screen: lesson list: Mathe, Englisch; focus 1; waiting: slot time");
+    }
+
+    #[test]
+    fn known_values_are_sorted_and_an_old_turn_is_marked() {
+        let c = Context { last: "weather".into(), last2: "call".into(), has: vec!["place".into(), "date".into()], age: 1, ..Context::empty() };
+        assert_eq!(c.compose(), "last: weather; before: call; known: date, place; a while ago");
+    }
+
+    #[test]
+    fn a_list_shows_at_most_eight_titles() {
+        let titles: Vec<String> = (1..=10).map(|i| format!("T{i}")).collect();
+        let c = Context { shown: "anime".into(), titles, ..Context::empty() };
+        assert_eq!(c.compose(), "screen: anime list: T1, T2, T3, T4, T5, T6, T7, T8");
+    }
+}

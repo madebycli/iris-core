@@ -254,3 +254,16 @@ impl Classifier for Brain {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Meta;
+
+    #[test]
+    fn the_output_layout_is_read_from_meta() {
+        let meta = Meta::parse("act:0:a,b,c\nnav:3:none,after\ntotal: 5\n");
+        assert_eq!(meta.labels[0], ("act".to_string(), vec!["a".to_string(), "b".to_string(), "c".to_string()]));
+        assert_eq!(meta.offsets["nav"], 3);
+        assert!(!meta.offsets.contains_key("total"));
+    }
+}
