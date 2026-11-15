@@ -1,6 +1,10 @@
-//! "Iris Brain": a pruned multilingual MiniLM fine-tuned on Iris' acts, run without any native
-//! library. The model files are not part of this repository; [`Brain::load`] reads a directory
+//! "Iris Brain": a pruned multilingual MiniLM fine-tuned on Iris' acts. [`Brain::load`] reads a directory
 //! holding `brain.onnx`, `meta.txt` and `pieces.tsv`.
+//!
+//! The network runs on ONNX Runtime, loaded at run time from the library the app already ships for speech
+//! (`libonnxruntime.so`, 1.28). A pure-Rust runtime was measured first: about five times slower and five
+//! times the CPU time per sentence, so it was not taken. One intra-op thread without spinning: as fast as
+//! two threads for one short sentence, at half the CPU time (battery).
 
 mod context;
 
@@ -8,8 +12,11 @@ pub use context::Context;
 
 use iris_core::{Classifier, ConversationContext, Prediction};
 use std::collections::HashMap;
+use ort::session::builder::GraphOptimizationLevel;
+use ort::session::Session;
+use ort::value::Tensor;
 use std::path::Path;
-use tract_onnx::prelude::*;
+use std::sync::{Mutex, OnceLock};
 use unicode_normalization::UnicodeNormalization;
 
 pub const MAX_CTX: usize = 52;
@@ -117,31 +124,76 @@ pub struct Understanding {
     pub heads: Vec<(String, Scored)>,
 }
 
-type Model = std::sync::Arc<TypedSimplePlan>;
+/// Why the network could not be loaded or run. Only the kind of failure, never a sentence.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BrainError(pub String);
+
+impl std::fmt::Display for BrainError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for BrainError {}
+
+pub type BrainResult<T> = Result<T, BrainError>;
+
+fn err(e: impl std::fmt::Display) -> BrainError {
+    BrainError(e.to_string())
+}
+
+/// ONNX Runtime allows one environment per process; it is made once, from the first library path given.
+static ENVIRONMENT: OnceLock<Result<ort::environment::Environment, BrainError>> = OnceLock::new();
+
+fn environment(library: &Path) -> BrainResult<&'static ort::environment::Environment> {
+    ENVIRONMENT
+        .get_or_init(|| {
+            let builder = ort::init_from(library).map_err(err)?;
+            builder.with_name("iris-brain").with_telemetry(false).build().map_err(err)
+        })
+        .as_ref()
+        .map_err(Clone::clone)
+}
+
+/// Where ONNX Runtime is: `IRIS_ORT_LIB` if set (tests and the desktop tool), else the library by its name,
+/// which on Android is found among the app's own native libraries.
+pub fn default_library() -> std::path::PathBuf {
+    match std::env::var("IRIS_ORT_LIB") {
+        Ok(p) if !p.is_empty() => p.into(),
+        _ => format!("{}onnxruntime{}", std::env::consts::DLL_PREFIX, std::env::consts::DLL_SUFFIX).into(),
+    }
+}
 
 pub struct Brain {
-    model: Model,
+    session: Mutex<Session>,
     tok: Tokenizer,
     meta: Meta,
 }
 
 impl Brain {
-    pub fn load(dir: &Path) -> TractResult<Self> {
-        let tok = Tokenizer::parse(&std::fs::read_to_string(dir.join("pieces.tsv"))?);
-        let meta = Meta::parse(&std::fs::read_to_string(dir.join("meta.txt"))?);
-        // The batch is always one sentence, and the shapes the exporter wrote down for inner nodes (with a
-        // symbolic batch) get in the way of that: drop them, the input facts below say what is needed.
-        let onnx = tract_onnx::onnx();
-        let mut proto = onnx.proto_model_for_path(dir.join("brain.onnx"))?;
-        if let Some(g) = proto.graph.as_mut() {
-            g.value_info.clear();
-        }
-        let mut graph = onnx.model_for_proto_model(&proto)?;
-        let t = graph.symbols.sym("t");
-        let seq = || InferenceFact::dt_shape(i64::datum_type(), tvec!(TDim::from(1), TDim::from(t.clone())));
-        graph = graph.with_input_fact(0, seq())?.with_input_fact(1, seq())?.with_input_fact(2, InferenceFact::dt_shape(i64::datum_type(), tvec!(TDim::from(1))))?;
-        let model = graph.into_optimized()?.into_runnable()?;
-        Ok(Self { model, tok, meta })
+    /// Loads the network from `dir` with ONNX Runtime from [`default_library`].
+    pub fn load(dir: &Path) -> BrainResult<Self> {
+        Self::load_with(dir, &default_library())
+    }
+
+    /// Loads the network from `dir` with ONNX Runtime from `library`.
+    pub fn load_with(dir: &Path, library: &Path) -> BrainResult<Self> {
+        let tok = Tokenizer::parse(&std::fs::read_to_string(dir.join("pieces.tsv")).map_err(err)?);
+        let meta = Meta::parse(&std::fs::read_to_string(dir.join("meta.txt")).map_err(err)?);
+        let env = environment(library)?;
+        let session = Session::builder(env)
+            .map_err(err)?
+            .with_optimization_level(GraphOptimizationLevel::All)
+            .map_err(err)?
+            .with_intra_threads(1)
+            .map_err(err)?
+            .with_inter_threads(1)
+            .map_err(err)?
+            .with_intra_op_spinning(false)
+            .map_err(err)?
+            .commit_from_file(dir.join("brain.onnx"))
+            .map_err(err)?;
+        Ok(Self { session: Mutex::new(session), tok, meta })
     }
 
     /// Token ids and the index where the utterance starts, as the network expects them.
@@ -156,13 +208,15 @@ impl Brain {
         (ids, 1 + c.len() + 2)
     }
 
-    pub fn logits(&self, ids: &[i64], ustart: usize) -> TractResult<Vec<f32>> {
+    pub fn logits(&self, ids: &[i64], ustart: usize) -> BrainResult<Vec<f32>> {
         let n = ids.len();
-        let ids_t: Tensor = tract_ndarray::Array2::from_shape_vec((1, n), ids.to_vec())?.into();
-        let mask_t: Tensor = tract_ndarray::Array2::from_shape_vec((1, n), vec![1i64; n])?.into();
-        let us_t: Tensor = tract_ndarray::Array1::from_vec(vec![ustart as i64]).into();
-        let out = self.model.run(tvec!(ids_t.into(), mask_t.into(), us_t.into()))?;
-        Ok(out[0].to_plain_array_view::<f32>()?.iter().copied().collect())
+        let ids_t = Tensor::from_array(([1usize, n], ids.to_vec())).map_err(err)?;
+        let mask_t = Tensor::from_array(([1usize, n], vec![1i64; n])).map_err(err)?;
+        let us_t = Tensor::from_array(([1usize], vec![ustart as i64])).map_err(err)?;
+        let mut session = self.session.lock().map_err(|_| BrainError("network lock poisoned".into()))?;
+        let out = session.run(ort::inputs!["ids" => ids_t, "mask" => mask_t, "ustart" => us_t]).map_err(err)?;
+        let (_, logits) = out[0].try_extract_tensor::<f32>().map_err(err)?;
+        Ok(logits.to_vec())
     }
 
     pub fn decode(&self, logits: &[f32]) -> Understanding {
@@ -180,7 +234,7 @@ impl Brain {
         Understanding { acts: slice("act").into_iter().take(3).collect(), heads }
     }
 
-    pub fn understand(&self, ctx: &Context, text: &str) -> TractResult<Understanding> {
+    pub fn understand(&self, ctx: &Context, text: &str) -> BrainResult<Understanding> {
         let (ids, us) = self.encode(ctx, text);
         Ok(self.decode(&self.logits(&ids, us)?))
     }

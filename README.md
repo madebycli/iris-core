@@ -5,7 +5,8 @@ utterance goes in, one reply comes out. No UI and no platform code: the device i
 through the `Host` and `Store` traits, so the whole assistant runs and is tested on a desktop.
 
 - **Skills today:** timers, reminders, lists, notes, alarms, time and date, the phone (volume, brightness, sound mode, Do Not Disturb, what is playing, web search, notifications), stopwatch, unit conversion, help. German and English.
-- **The network:** `crates/iris-brain` runs the trained MiniLM in pure Rust (tract), no native library. Model files are not in this repository.
+- **The network:** `crates/iris-brain` runs the trained MiniLM: tokenizer, context, decoding in Rust, inference on ONNX Runtime
+  (loaded at run time; on Android the `libonnxruntime.so` the app ships for speech). The model is in `models/brain`.
 - **Language is data:** every word the engine knows lives in `lang/<code>.toml` and
   `crates/iris-skills/data/<skill>/<code>.toml`, never in Rust code.
 - **Status:** the Android app uses it behind an experimental switch. Nothing else is moved yet;
@@ -14,7 +15,7 @@ through the `Host` and `Store` traits, so the whole assistant runs and is tested
 ```
 crates/iris-core     pipeline, language packs, time expressions, Skill / Host / Store contracts
 crates/iris-skills   the built-in skills (Rust for logic, TOML for words)
-crates/iris-brain    the trained network in pure Rust (tract)
+crates/iris-brain    the trained network (Rust around ONNX Runtime)
 crates/iris-store    SQLite store (desktop, station, watch)
 crates/iris-ffi      UniFFI boundary for frontends (Kotlin bindings)
 crates/iris-cli      `iris` in a terminal, a fake phone, the spec runner

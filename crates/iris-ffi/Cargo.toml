@@ -20,6 +20,7 @@ cli = ["uniffi/cli"]
 [dependencies]
 iris-core.workspace = true
 iris-skills.workspace = true
+iris-brain = { path = "../iris-brain" }
 serde.workspace = true
 serde_json.workspace = true
 uniffi = "0.29"

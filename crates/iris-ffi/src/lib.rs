@@ -6,6 +6,7 @@
 //! when a field is added.
 
 use iris_core::{Capability, Classifier, DeviceAction, DeviceResult, Engine, Entry, EntryKind, ExternalEvent, ExternalList, ExternalTask, Host, HostError, Notice, NowPlaying, Prediction, Store};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 uniffi::setup_scaffolding!();
@@ -57,8 +58,6 @@ pub trait Phone: Send + Sync {
     fn put_entry(&self, entry: String);
     fn delete_entry(&self, id: String) -> bool;
 
-    /// The trained network: JSON `[{"label","p"}]`, most likely first; `[]` when it is not loaded.
-    fn classify(&self, text: String, lang: String, context: String) -> String;
 }
 
 struct Bridge(Arc<dyn Phone>);
@@ -164,26 +163,81 @@ impl Store for Bridge {
     }
 }
 
-impl Classifier for Bridge {
+/// The trained network, owned by the core. Loaded on the first sentence that needs it and released
+/// when the app says the assistant has been idle, so it costs no memory while Iris is not used.
+#[derive(Default)]
+struct BrainSlot {
+    place: Mutex<Option<(PathBuf, PathBuf)>>,
+    brain: Mutex<Option<Arc<iris_brain::Brain>>>,
+    error: Mutex<Option<String>>,
+}
+
+impl BrainSlot {
+    fn get(&self) -> Option<Arc<iris_brain::Brain>> {
+        let mut brain = self.brain.lock().unwrap();
+        if let Some(b) = brain.as_ref() {
+            return Some(b.clone());
+        }
+        let (dir, library) = self.place.lock().unwrap().clone()?;
+        match iris_brain::Brain::load_with(&dir, &library) {
+            Ok(b) => {
+                let b = Arc::new(b);
+                *brain = Some(b.clone());
+                *self.error.lock().unwrap() = None;
+                Some(b)
+            }
+            Err(e) => {
+                *self.error.lock().unwrap() = Some(e.0);
+                None
+            }
+        }
+    }
+}
+
+struct BrainClassifier(Arc<BrainSlot>);
+
+impl Classifier for BrainClassifier {
     fn classify(&self, text: &str, lang: &str) -> Vec<Prediction> {
         self.classify_with(text, lang, &iris_core::ConversationContext::default())
     }
 
     fn classify_with(&self, text: &str, lang: &str, context: &iris_core::ConversationContext) -> Vec<Prediction> {
-        #[derive(serde::Deserialize)]
-        struct Row {
-            label: String,
-            p: f32,
-        }
-        let rows: Vec<Row> = serde_json::from_str(&self.0.classify(text.to_string(), lang.to_string(), serde_json::to_string(context).unwrap_or_default())).unwrap_or_default();
-        rows.into_iter().map(|r| Prediction { label: r.label, p: r.p }).collect()
+        self.0.get().map(|b| b.classify_with(text, lang, context)).unwrap_or_default()
     }
+}
+
+/// The conversation as the app tells the network about it (the fields of `iris_brain::Context`).
+#[derive(serde::Deserialize, Default)]
+#[serde(default)]
+struct ContextJson {
+    last: String,
+    last2: String,
+    shown: String,
+    titles: Vec<String>,
+    focus: Option<i32>,
+    has: Vec<String>,
+    age: i32,
+    expect: String,
+    slot: String,
+}
+
+#[derive(serde::Serialize)]
+struct ScoredJson<'a> {
+    label: &'a str,
+    p: f32,
+}
+
+#[derive(serde::Serialize)]
+struct UnderstandingJson<'a> {
+    acts: Vec<ScoredJson<'a>>,
+    heads: std::collections::BTreeMap<&'a str, ScoredJson<'a>>,
 }
 
 /// The assistant. One per app.
 #[derive(uniffi::Object)]
 pub struct IrisCore {
     engine: Mutex<Engine>,
+    brain: Arc<BrainSlot>,
 }
 
 #[uniffi::export]
@@ -191,9 +245,58 @@ impl IrisCore {
     #[uniffi::constructor]
     pub fn new(phone: Box<dyn Phone>) -> Arc<Self> {
         let phone: Arc<dyn Phone> = Arc::from(phone);
-        let mut engine = iris_skills::engine(Arc::new(Bridge(phone.clone())), Arc::new(Bridge(phone.clone()))).expect("built-in skills are valid");
-        engine.set_classifier(Box::new(Bridge(phone)));
-        Arc::new(Self { engine: Mutex::new(engine) })
+        let mut engine = iris_skills::engine(Arc::new(Bridge(phone.clone())), Arc::new(Bridge(phone))).expect("built-in skills are valid");
+        let brain = Arc::new(BrainSlot::default());
+        engine.set_classifier(Box::new(BrainClassifier(brain.clone())));
+        Arc::new(Self { engine: Mutex::new(engine), brain })
+    }
+
+    /// Where the network is: a directory with `brain.onnx`, `meta.txt` and `pieces.tsv`, and the ONNX
+    /// Runtime library (on Android its file name, `libonnxruntime.so`, is enough). Nothing is loaded yet.
+    pub fn set_brain(&self, dir: String, library: String) {
+        *self.brain.place.lock().unwrap() = Some((PathBuf::from(dir), PathBuf::from(library)));
+        *self.brain.brain.lock().unwrap() = None;
+    }
+
+    /// Loads the network now (when the assistant opens), so the first sentence does not wait. False when it cannot be loaded.
+    pub fn warm_up(&self) -> bool {
+        self.brain.get().is_some()
+    }
+
+    /// Frees the network's memory; the next sentence loads it again.
+    pub fn release_brain(&self) {
+        *self.brain.brain.lock().unwrap() = None;
+    }
+
+    pub fn brain_loaded(&self) -> bool {
+        self.brain.brain.lock().unwrap().is_some()
+    }
+
+    /// Why the network could not be loaded the last time, if it could not.
+    pub fn brain_error(&self) -> Option<String> {
+        self.brain.error.lock().unwrap().clone()
+    }
+
+    /// What the network makes of a sentence in its conversation (JSON of `iris_brain::Context`):
+    /// JSON `{"acts": [{"label","p"}] (three, likeliest first), "heads": {"name": {"label","p"}}}`.
+    /// `None` when the network cannot be loaded or run.
+    pub fn understand(&self, text: String, context: String) -> Option<String> {
+        let c: ContextJson = serde_json::from_str(&context).unwrap_or_default();
+        let ctx = iris_brain::Context { last: c.last, last2: c.last2, shown: c.shown, titles: c.titles, focus: c.focus.unwrap_or(-1), has: c.has, age: c.age, expect: c.expect, slot: c.slot };
+        let brain = self.brain.get()?;
+        match brain.understand(&ctx, &text) {
+            Ok(u) => {
+                let json = UnderstandingJson {
+                    acts: u.acts.iter().map(|s| ScoredJson { label: &s.label, p: s.p }).collect(),
+                    heads: u.heads.iter().map(|(n, s)| (n.as_str(), ScoredJson { label: &s.label, p: s.p })).collect(),
+                };
+                serde_json::to_string(&json).ok()
+            }
+            Err(e) => {
+                *self.brain.error.lock().unwrap() = Some(e.0);
+                None
+            }
+        }
     }
 
     /// Answers one utterance. Returns a reply as JSON: `kind` ("done", "question", "failed",

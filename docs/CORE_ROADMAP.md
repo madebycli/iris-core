@@ -15,9 +15,11 @@ counterpart of a feature is deleted only after its sentences pass in the core.
   by content, several entries per sentence, "und noch …", guided with "Noch etwas?", tick,
   remove, empty, today's entries), **notes**, **alarm** (through the host's clock app, honest
   about receipts) and **clock** (time and date). 295 spec checks.
-- `iris-brain`: the trained network in pure Rust (tract). Tokenizer, context text, inference,
-  decoding; parity with the Kotlin runtime is tested against golden vectors. Implements
-  `Classifier`, so the CLI and a station can use it without a native library.
+- `iris-brain`: the trained network. Tokenizer, context text and decoding in Rust; inference on
+  ONNX Runtime 1.28, loaded at run time (`ort`, `load-dynamic`). A pure-Rust runtime (tract) was
+  measured first and dropped: about five times slower and five times the CPU time per sentence.
+  One intra-op thread without spinning: as fast as two, at half the CPU time. Implements
+  `Classifier`; the app reaches it through `IrisCore::understand`, `warm_up` and `release_brain`.
 - `iris-store`: a SQLite `Store` on the table of the Android app (desktop, station, watch).
 - `iris-ffi`: UniFFI boundary (`IrisCore`, `Phone`); `build-android.sh <app-main-dir>`.
 - `iris-cli`: terminal, fake phone, spec runner, `--brain`, `--db`.
