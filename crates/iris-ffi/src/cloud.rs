@@ -160,3 +160,21 @@ pub fn memory_recall(text: String, question: String) -> String {
 pub fn memory_specific(question: String) -> bool {
     iris_cloud::memory::specific(&question)
 }
+
+/// The whole message for the research model: a short instruction and the bare question, nothing else.
+#[uniffi::export]
+pub fn research_prompt(language: String, question: String) -> String {
+    iris_cloud::research::prompt(&language, &question)
+}
+
+/// The research model's answer as Iris shows and speaks it (prose, no Markdown); none when nothing readable is left.
+#[uniffi::export]
+pub fn research_clean(answer: String) -> Option<String> {
+    iris_cloud::research::clean(&answer)
+}
+
+/// A conversation turn for Lumo's web chat: a plain request, no protocol; the memory only for a chat's first message.
+#[uniffi::export]
+pub fn research_chat(language: String, text: String, memory: String) -> String {
+    iris_cloud::research::chat(&language, &text, &memory)
+}

@@ -7,6 +7,7 @@ mod crypto;
 mod stream;
 pub mod organize;
 pub mod memory;
+pub mod research;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
