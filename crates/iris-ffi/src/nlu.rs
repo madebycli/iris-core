@@ -202,6 +202,18 @@ pub fn nlu_fallback_message(plan: String, de: bool, online: bool, last_topic: Op
     fallback::message(&plan_of(&plan), de, online, last_topic.as_deref())
 }
 
+/// Whether an unsure sentence is worth a paid request to the online AI (see `iris_nlu::fallback::worth_cloud`).
+#[uniffi::export]
+pub fn nlu_worth_cloud(plan: String, text: String) -> bool {
+    fallback::worth_cloud(&plan_of(&plan), &text)
+}
+
+/// A real conversation for the online AI, not a set phrase (see `iris_nlu::fallback::conversation`).
+#[uniffi::export]
+pub fn nlu_conversation(label: String, text: String) -> bool {
+    fallback::conversation(&label, &text)
+}
+
 #[uniffi::export]
 pub fn nlu_function_name(label: String, de: bool) -> String {
     fallback::name(&label, de)

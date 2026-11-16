@@ -5,6 +5,8 @@
 mod attestation;
 mod crypto;
 mod stream;
+pub mod organize;
+pub mod memory;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};

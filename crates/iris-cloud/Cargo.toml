@@ -1,6 +1,6 @@
 [package]
 name = "iris-cloud"
-description = "Opt-in Venice E2EE protocol, cryptography and attestation for Iris frontends."
+description = "Online AI for Iris frontends: the Venice E2EE protocol (cryptography, attestation) and the provider-independent organizer for entries."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

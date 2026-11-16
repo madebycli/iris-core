@@ -106,3 +106,51 @@ impl VeniceConnection {
         )
     }
 }
+
+// ---- the AI integration, independent of the provider -------------------------------------------------------
+
+/// System and user message to tidy up entries: JSON `{"system","user"}`. `drafts` is JSON `[{"id","kind","title","collection"}]`.
+#[uniffi::export]
+pub fn organize_prompt(language: String, sentence: String, drafts: String, lists: Vec<String>, rules: String, allow_new_lists: bool) -> String {
+    let drafts: Vec<iris_cloud::organize::Draft> = serde_json::from_str(&drafts).unwrap_or_default();
+    let (system, user) = iris_cloud::organize::prompt(&language, &sentence, &drafts, &lists, &rules, allow_new_lists);
+    serde_json::json!({"system": system, "user": user}).to_string()
+}
+
+/// The checked changes of the AI's answer: JSON `[{"id","title","collection"}]`, empty when nothing usable.
+#[uniffi::export]
+pub fn organize_apply(answer: String, sentence: String, drafts: String, lists: Vec<String>, allow_new_lists: bool) -> String {
+    let drafts: Vec<iris_cloud::organize::Draft> = serde_json::from_str(&drafts).unwrap_or_default();
+    serde_json::to_string(&iris_cloud::organize::apply(&answer, &sentence, &drafts, &lists, allow_new_lists)).unwrap_or_else(|_| "[]".into())
+}
+
+/// "Ordne meine Erinnerungen": "reminder", "item", "note" or "all"; none for other sentences.
+#[uniffi::export]
+pub fn organize_request(text: String) -> Option<String> {
+    iris_cloud::organize::request(&text).map(str::to_string)
+}
+
+/// The memory text in its current form ("key: value" lines; earlier "- fact" lists are taken over).
+#[uniffi::export]
+pub fn memory_normalize(text: String) -> String {
+    iris_cloud::memory::render(&iris_cloud::memory::parse(&text))
+}
+
+/// The bounded memory block for a session's context.
+#[uniffi::export]
+pub fn memory_for_prompt(text: String) -> String {
+    iris_cloud::memory::for_prompt(&iris_cloud::memory::parse(&text))
+}
+
+/// Applies the changes a reply proposed: JSON `{"text": new memory text, "applied": [{"op","key","value"}]}`.
+#[uniffi::export]
+pub fn memory_apply(text: String, ops: String) -> String {
+    let (entries, applied) = iris_cloud::memory::apply(&iris_cloud::memory::parse(&text), &ops);
+    serde_json::json!({"text": iris_cloud::memory::render(&entries), "applied": applied}).to_string()
+}
+
+/// The entries a question is about: JSON `[{"key","value"}]`.
+#[uniffi::export]
+pub fn memory_recall(text: String, question: String) -> String {
+    serde_json::to_string(&iris_cloud::memory::recall(&iris_cloud::memory::parse(&text), &question)).unwrap_or_else(|_| "[]".into())
+}
