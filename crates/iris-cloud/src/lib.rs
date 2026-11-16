@@ -93,6 +93,8 @@ pub struct Completion {
     pub text: String,
     pub model: String,
     pub request_id: String,
+    /// The model stopped at the token limit: the text is complete as far as it goes, and authenticated.
+    pub truncated: bool,
 }
 
 pub struct Client {
@@ -160,7 +162,17 @@ impl Client {
             .append_pair("model", model)
             .append_pair("request_id", &parsed.id)
             .finish();
-        let signature = self.get(&format!("tee/signature?{query}"))?;
+        // The signature may be stored a moment after the stream ends: a few short retries, never a resend.
+        let mut attempt = 0;
+        let signature = loop {
+            match self.get(&format!("tee/signature?{query}")) {
+                Err(Error::Network) if attempt < 3 => {
+                    attempt += 1;
+                    std::thread::sleep(std::time::Duration::from_millis(700));
+                }
+                other => break other?,
+            }
+        };
         authenticate_reply(
             &signature,
             &attestation,
@@ -172,6 +184,7 @@ impl Client {
             text: parsed.plain.to_string(),
             model: model.into(),
             request_id: parsed.id,
+            truncated: parsed.truncated,
         })
     }
 
@@ -198,6 +211,7 @@ impl Client {
         }
         match response.status {
             200..=299 => Ok(response),
+            400 | 422 => Err(Error::Protocol),
             401 | 403 => Err(Error::Authentication),
             402 => Err(Error::Credits),
             429 => Err(Error::RateLimit),
@@ -223,7 +237,9 @@ fn encrypted_body(
         {"role":"user", "content":crypto::encrypt(&user,key)?}
     ]);
     serde_json::to_vec(&json!({"model":model,"messages":messages,"stream":true,"max_completion_tokens":1024,
-        "venice_parameters":{"include_venice_system_prompt":false,"enable_web_search":"off","enable_e2ee":true}
+        // E2EE is switched on by the X-Venice-TEE-* headers (official guide); these two keep Venice's own
+        // system prompt and web search out, which the guide lists as disabled for E2EE anyway.
+        "venice_parameters":{"include_venice_system_prompt":false,"enable_web_search":"off"}
     })).map_err(|_| Error::Protocol)
 }
 
@@ -290,13 +306,12 @@ fn authenticate_reply(
     {
         return Err(Error::Signature);
     }
+    let mut id_confirmed = false;
     for field in ["request_id", "requested_request_id"] {
-        if signature
-            .get(field)
-            .and_then(Value::as_str)
-            .is_some_and(|v| v != reply.id)
-        {
-            return Err(Error::Signature);
+        match signature.get(field).and_then(Value::as_str) {
+            Some(v) if v != reply.id => return Err(Error::Signature),
+            Some(_) => id_confirmed = true,
+            None => {}
         }
     }
     let text = signature
@@ -314,9 +329,13 @@ fn authenticate_reply(
     let ciphertext_hash = hex::encode(Sha256::digest(reply.cipher.as_bytes()));
     let stream_hash = hex::encode(Sha256::digest(raw_stream));
     let plain_hash = hex::encode(Sha256::digest(reply.plain.as_bytes()));
-    // A ciphertext signature is bound to our fresh recipient key. A plaintext hash is
-    // accepted only with the hash of the EXACT request sent, preventing response replay.
+    // The official CLI knows two modes: the signed text is the reply content, or
+    // "sha256(request):sha256(content)". A ciphertext is bound to our fresh recipient key. The plain
+    // reply content alone is accepted only when the signature names this request's id, which only
+    // the enclave can have signed for this completion; otherwise it could be a replayed answer.
     let bound = text == reply.cipher
+        || text == reply.content_cipher
+        || (id_confirmed && text == reply.plain.as_str())
         || text == format!("{request_hash}:{ciphertext_hash}")
         || text == format!("{request_hash}:{stream_hash}")
         || text == format!("{request_hash}:{plain_hash}");
@@ -394,6 +413,8 @@ mod tests {
             id: "fresh-id".into(),
             plain: Zeroizing::new("Private reply".into()),
             cipher: "ciphertext".into(),
+            content_cipher: "ciphertext".into(),
+            truncated: false,
         };
         let request_hash = hex::encode(Sha256::digest(b"exact request bytes"));
         let text = format!(
@@ -415,10 +436,26 @@ mod tests {
             id: reply.id.clone(),
             plain: Zeroizing::new("Forged reply".into()),
             cipher: reply.cipher.clone(),
+            content_cipher: reply.cipher.clone(),
+            truncated: false,
         };
         assert!(
             authenticate_reply(&response, &attested, &altered, &request_hash, b"wire").is_err()
         );
+        // the plain reply content as signed text: only with this request's id in the signature
+        let plain_text = reply.plain.to_string();
+        let prefix = format!("\x19Ethereum Signed Message:\n{}", plain_text.len());
+        let (sig, recovery) = signing
+            .sign_digest_recoverable(Keccak256::new().chain_update(prefix).chain_update(&plain_text))
+            .unwrap();
+        let mut sig = sig.to_bytes().to_vec();
+        sig.push(recovery.to_byte());
+        let with_id = json!({"text":plain_text,"signature":hex::encode(&sig),"request_id":"fresh-id"});
+        assert!(authenticate_reply(&with_id, &attested, &reply, &request_hash, b"wire").is_ok());
+        let without_id = json!({"text":plain_text,"signature":hex::encode(&sig)});
+        assert!(authenticate_reply(&without_id, &attested, &reply, &request_hash, b"wire").is_err());
+        let other_id = json!({"text":plain_text,"signature":hex::encode(&sig),"request_id":"old-id"});
+        assert!(authenticate_reply(&other_id, &attested, &reply, &request_hash, b"wire").is_err());
     }
     #[test]
     fn missing_trust_or_forged_attestation_never_sends_a_prompt() {

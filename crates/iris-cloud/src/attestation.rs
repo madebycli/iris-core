@@ -96,14 +96,23 @@ impl Client {
             Report::TD15(r) => &r.base,
             _ => return Err(Error::Attestation),
         };
-        if report.td_attributes[0] & 1 != 0 || verified.status != "UpToDate" {
+        // Debug TDs never pass. TCB: up to date, or only software hardening advised (common on
+        // production hosts); out of date, revoked or configuration problems are refused.
+        if report.td_attributes[0] & 1 != 0 || !matches!(verified.status.as_str(), "UpToDate" | "SWHardeningNeeded") {
             return Err(Error::Attestation);
         }
         let address = crypto::address(&key);
         if report.report_data[..20] != address {
             return Err(Error::Attestation);
         }
-        check_nonce_binding(&report.report_data, &nonce)?;
+        // The guide documents only the key binding. Where the nonce sits in REPORTDATA is not documented:
+        // found there it is checked locally; otherwise Venice's own nonce binding must be confirmed (as the
+        // official CLI does), together with the echoed fresh nonce checked in `check_envelope`.
+        let nonce_local = check_nonce_binding(&report.report_data, &nonce).is_ok();
+        let nonce_server = evidence.pointer("/server_verification/nonceBinding/bound").and_then(Value::as_bool) == Some(true);
+        if !nonce_local && !nonce_server {
+            return Err(Error::Attestation);
+        }
         if let Some(reported) = evidence.get("signing_address").and_then(Value::as_str) {
             if reported.trim_start_matches("0x").to_ascii_lowercase() != hex::encode(address) {
                 return Err(Error::Attestation);
@@ -116,10 +125,10 @@ impl Client {
             hex::encode(report.rt_mr3),
         ];
         let mrtd = hex::encode(report.mr_td);
-        let policy = format!(
-            "iris-venice-runtime-v1\n{model}\n{mrtd}\n{}",
-            rtmrs.join("\n")
-        );
+        // RTMR3 records runtime events of the instance (in dstack deployments the app and instance
+        // data), so it differs between replicas behind one model. The pinned identity is the TD image and
+        // its boot chain: MRTD and RTMR0 to RTMR2.
+        let policy = format!("iris-venice-runtime-v2\n{model}\n{mrtd}\n{}", rtmrs[..3].join("\n"));
         Ok(Attested {
             key,
             key_hex: key_hex.to_owned(),
@@ -153,15 +162,13 @@ fn check_nonce_binding(report_data: &[u8; 64], nonce: &str) -> Result<()> {
 }
 
 fn check_envelope(e: &Value, model: &str, nonce: &str) -> Result<()> {
+    // documented fields; `server_verification` is only in the official CLI: when present it must agree
+    let refused = |path: &str| e.pointer(path).and_then(Value::as_bool) == Some(false);
     if e.get("verified").and_then(Value::as_bool) != Some(true)
         || e.get("nonce").and_then(Value::as_str) != Some(nonce)
         || e.get("model").and_then(Value::as_str) != Some(model)
-        || e.pointer("/server_verification/nonceBinding/bound")
-            .and_then(Value::as_bool)
-            != Some(true)
-        || e.pointer("/server_verification/tdx/valid")
-            .and_then(Value::as_bool)
-            != Some(true)
+        || refused("/server_verification/nonceBinding/bound")
+        || refused("/server_verification/tdx/valid")
     {
         return Err(Error::Attestation);
     }
@@ -204,6 +211,11 @@ mod tests {
         assert!(check_envelope(&e, DEFAULT_MODEL, "fresh").is_ok());
         assert!(check_envelope(&e, DEFAULT_MODEL, "old").is_err());
         assert!(check_envelope(&e, "e2ee-other", "fresh").is_err());
+        let mut refused = e.clone();
+        refused["server_verification"]["tdx"]["valid"] = json!(false);
+        assert!(check_envelope(&refused, DEFAULT_MODEL, "fresh").is_err());
+        let documented_only = json!({"verified":true,"nonce":"fresh","model":DEFAULT_MODEL});
+        assert!(check_envelope(&documented_only, DEFAULT_MODEL, "fresh").is_ok());
         e["nvidia_payload"] = json!({});
         assert!(check_envelope(&e, DEFAULT_MODEL, "fresh").is_err());
     }

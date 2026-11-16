@@ -3,7 +3,11 @@ use super::*;
 pub(crate) struct Reply {
     pub id: String,
     pub plain: Zeroizing<String>,
+    /// Every encrypted delta in order (content and reasoning).
     pub cipher: String,
+    /// The encrypted content deltas only.
+    pub content_cipher: String,
+    pub truncated: bool,
 }
 
 /// Parse SSE independently of network chunk boundaries. Buffering is bounded by the HTTP
@@ -17,6 +21,8 @@ pub(crate) fn parse(bytes: &[u8], recipient: &crypto::Recipient, model: &str) ->
         id: String::new(),
         plain: Zeroizing::new(String::new()),
         cipher: String::new(),
+        content_cipher: String::new(),
+        truncated: false,
     };
     let mut event = String::new();
     let mut done = false;
@@ -48,35 +54,36 @@ pub(crate) fn parse(bytes: &[u8], recipient: &crypto::Recipient, model: &str) ->
             if !v.get("error").is_none_or(Value::is_null) {
                 return Err(Error::Protocol);
             }
-            if v.get("model")
-                .and_then(Value::as_str)
-                .is_some_and(|s| s != model)
-            {
+            // the model string of a chunk is the provider's (it may name an internal deployment): the
+            // model is bound by the attestation and the signature instead
+            let _ = model;
+            let choices = v.get("choices").and_then(Value::as_array).cloned().unwrap_or_default();
+            // a usage-only event may come without id or choices
+            if let Some(id) = v.get("id").and_then(Value::as_str) {
+                if id.is_empty() || id.len() > 200 || id.chars().any(char::is_control) {
+                    return Err(Error::Protocol);
+                }
+                if reply.id.is_empty() {
+                    reply.id = id.into();
+                } else if reply.id != id {
+                    return Err(Error::Protocol);
+                }
+            } else if !choices.is_empty() {
                 return Err(Error::Protocol);
             }
-            let id = v.get("id").and_then(Value::as_str).ok_or(Error::Protocol)?;
-            if id.is_empty() || id.len() > 200 || id.chars().any(char::is_control) {
-                return Err(Error::Protocol);
-            }
-            if reply.id.is_empty() {
-                reply.id = id.into();
-            } else if reply.id != id {
-                return Err(Error::Protocol);
-            }
-            let choices = v
-                .get("choices")
-                .and_then(Value::as_array)
-                .ok_or(Error::Protocol)?;
             if choices.is_empty() {
                 continue;
-            } // usage-only final event
+            }
             if choices.len() != 1 || choices[0].get("index").and_then(Value::as_u64) != Some(0) {
                 return Err(Error::Protocol);
             }
             let choice = &choices[0];
             if let Some(reason) = choice.get("finish_reason").filter(|v| !v.is_null()) {
-                if reason.as_str() != Some("stop") || finished {
-                    return Err(Error::Protocol);
+                match reason.as_str() {
+                    Some("stop") if !finished => {}
+                    // the token limit: what came is complete as far as it goes, and still authenticated
+                    Some("length") if !finished => reply.truncated = true,
+                    _ => return Err(Error::Protocol),
                 }
                 finished = true;
             }
@@ -98,6 +105,7 @@ pub(crate) fn parse(bytes: &[u8], recipient: &crypto::Recipient, model: &str) ->
                         let plain = Zeroizing::new(recipient.decrypt(cipher)?);
                         reply.cipher.push_str(cipher);
                         if field == "content" {
+                            reply.content_cipher.push_str(cipher);
                             reply.plain.push_str(&plain);
                         }
                         if reply.plain.len() > MAX_REPLY_BYTES {
@@ -149,18 +157,18 @@ mod tests {
             DEFAULT_MODEL
         )
         .is_err());
+        let cut = parse(wire.replace("\"stop\"", "\"length\"").as_bytes(), &recipient, DEFAULT_MODEL).unwrap();
+        assert!(cut.truncated && &*cut.plain == "A private reply");
         assert!(parse(
-            wire.replace("\"stop\"", "\"length\"").as_bytes(),
+            wire.replace("\"stop\"", "\"content_filter\"").as_bytes(),
             &recipient,
             DEFAULT_MODEL
         )
         .is_err());
-        assert!(parse(
-            wire.replace(DEFAULT_MODEL, "e2ee-wrong").as_bytes(),
-            &recipient,
-            DEFAULT_MODEL
-        )
-        .is_err());
+        // a usage-only event without id is fine; content without id is not
+        let usage = wire.replace("data: [DONE]", "data: {\"usage\":{\"total_tokens\":9},\"choices\":[]}\r\n\r\ndata: [DONE]");
+        assert!(parse(usage.as_bytes(), &recipient, DEFAULT_MODEL).is_ok());
+        assert!(parse(wire.replace("\"id\":\"fresh-request\",", "").as_bytes(), &recipient, DEFAULT_MODEL).is_err());
         assert!(parse(
             stream("unencrypted fallback").as_bytes(),
             &recipient,
