@@ -164,3 +164,51 @@ const EN: &[(&str, &str)] = &[
     ("smalltalk_greeting", "a greeting"), ("smalltalk_howareyou", "how I am"), ("smalltalk_thanks", "a thank you"), ("smalltalk_farewell", "a goodbye"), ("smalltalk_identity", "who I am"),
     ("smalltalk_help", "what I can do"), ("smalltalk_compliment", "a compliment"), ("smalltalk_love", "a declaration of love"), ("smalltalk_insult", "an insult"), ("smalltalk_feeling_bad", "that you feel bad"), ("smalltalk_feeling_good", "that you feel good"),
 ];
+
+/// Whether an unsure sentence is worth a paid request to the online AI. A knowledge question is; a
+/// sentence the network could not place and that is no real question is not (most often the speech
+/// recogniser heard noise or nonsense): Iris asks back locally instead, which costs nothing.
+pub fn worth_cloud(plan: &Plan, text: &str) -> bool {
+    match plan {
+        Plan::Knowledge => true,
+        Plan::Unknown | Plan::Suggest(_) => (is_question(text) || asks_to_explain(text)) && word_count(text) >= 3,
+        Plan::Run(_) | Plan::Clarify(_, _) | Plan::Fragment => false,
+    }
+}
+
+/// "Erzähl mir etwas über ...", "Nenn drei Flüsse", "Explain ...": a knowledge request without a question mark.
+fn asks_to_explain(text: &str) -> bool {
+    re(r"(?iu)^(?:bitte\s+)?(?:erzähl\w*|nenn\w*|erklär\w*|beschreib\w*|sag mir|übersetz\w*|fass\w* .* zusammen|tell me|explain|describe|name|list|give me|summari[sz]e|translate)\b").contains(text.trim())
+}
+
+/// A real conversation ("ich fühle mich heute mies, weil ...") goes to the online AI; a set phrase
+/// ("hi", "danke", "wie geht's") keeps Iris's own answer.
+pub fn conversation(label: &str, text: &str) -> bool {
+    matches!(label, "smalltalk" | "smalltalk_feeling_bad" | "smalltalk_feeling_good" | "smalltalk_love" | "smalltalk_insult") && word_count(text) >= 4
+}
+
+#[cfg(test)]
+mod cost_tests {
+    use super::*;
+
+    #[test]
+    fn noise_and_fragments_stay_local_questions_go_out() {
+        assert!(worth_cloud(&Plan::Knowledge, "wer hat den Eiffelturm gebaut"));
+        assert!(!worth_cloud(&Plan::Unknown, "blau Fenster laufen Nudel"));
+        assert!(!worth_cloud(&Plan::Unknown, "ähm also"));
+        assert!(worth_cloud(&Plan::Unknown, "warum ist der Himmel blau"));
+        assert!(worth_cloud(&Plan::Unknown, "erzähl mir etwas über den Eiffelturm"));
+        assert!(worth_cloud(&Plan::Unknown, "Nenn drei Flüsse in Europa"));
+        assert!(!worth_cloud(&Plan::Suggest(vec!["timer_set".into()]), "Timer Nudel Wasser"));
+        assert!(!worth_cloud(&Plan::Fragment, "und dann?"));
+        assert!(!worth_cloud(&Plan::Clarify("a".into(), "b".into()), "was meinst du"));
+    }
+
+    #[test]
+    fn set_phrases_stay_local_conversation_goes_out() {
+        assert!(!conversation("smalltalk_greeting", "hi wie geht es dir heute"));
+        assert!(!conversation("smalltalk_feeling_bad", "mir gehts mies"));
+        assert!(conversation("smalltalk_feeling_bad", "ich fühle mich heute richtig mies"));
+        assert!(conversation("smalltalk", "ich hab heute meine Prüfung bestanden"));
+    }
+}

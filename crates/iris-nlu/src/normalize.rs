@@ -19,16 +19,16 @@ static NUMBERS: LazyLock<HashMap<String, u32>> = LazyLock::new(|| {
     for (i, tens) in ["zwanzig", "dreißig", "vierzig", "fünfzig", "sechzig", "siebzig", "achtzig", "neunzig"].iter().enumerate() {
         let n = (i as u32 + 2) * 10;
         m.insert(tens.to_string(), n);
-        for unit in 1..=9 {
-            let u = if unit == 1 { "ein" } else { SMALL_DE[unit] };
+        for (unit, word) in SMALL_DE.iter().enumerate().take(10).skip(1) {
+            let u = if unit == 1 { "ein" } else { word };
             m.insert(format!("{u}und{tens}"), n + unit as u32);
         }
     }
     for (i, tens) in ["twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"].iter().enumerate() {
         let n = (i as u32 + 2) * 10;
         m.insert(tens.to_string(), n);
-        for unit in 1..=9 {
-            m.insert(format!("{tens} {}", SMALL_EN[unit]), n + unit as u32);
+        for (unit, word) in SMALL_EN.iter().enumerate().take(10).skip(1) {
+            m.insert(format!("{tens} {word}"), n + unit as u32);
         }
     }
     for w in ["ein", "eine", "einen", "einer"] {

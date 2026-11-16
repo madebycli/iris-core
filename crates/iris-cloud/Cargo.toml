@@ -1,0 +1,26 @@
+[package]
+name = "iris-cloud"
+description = "Online AI for Iris frontends: the Venice E2EE protocol (cryptography, attestation) and the provider-independent organizer for entries."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+aes-gcm = { version = "0.10", features = ["zeroize"] }
+# Enable wiping of expanded AES key schedules as well as our derived key buffer.
+aes = { version = "0.8", features = ["zeroize"] }
+base64 = "0.22"
+hex = "0.4"
+hkdf = "0.12"
+k256 = { version = "0.13", features = ["ecdh", "ecdsa"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
+sha2 = "0.10"
+sha3 = "0.10"
+zeroize = "1"
+thiserror = "2"
+anyhow = "1"
+futures = { version = "0.3", features = ["executor"] }
+dcap-qvl = { version = "=0.7.1", default-features = false, features = ["report", "rustcrypto", "default-x509"] }
+url = "2"
