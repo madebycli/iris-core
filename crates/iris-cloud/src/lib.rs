@@ -336,12 +336,25 @@ fn authenticate_reply(
     // "sha256(request):sha256(content)". A ciphertext is bound to our fresh recipient key. The plain
     // reply content alone is accepted only when the signature names this request's id, which only
     // the enclave can have signed for this completion; otherwise it could be a replayed answer.
+    // Venice's aci/1 gateway signs "sha256(request):sha256(response)" as its own gateway saw them. Measured live: the request
+    // hash is the same for different encrypted requests, and the response hash is over the stream before Venice's API
+    // rewrites it, so neither can be recomputed here; Venice documents both as provider-reported. Accepted only when the
+    // attested key signed it (checked above) and both the signature and its receipt name this request's id. This proves
+    // that the attested runtime signed a record for this completion; it does not authenticate the reply's bytes, which
+    // stay confidential because they are encrypted to our fresh key.
+    let hex64 = |v: &str| v.len() == 64 && v.bytes().all(|b| b.is_ascii_hexdigit());
+    let receipt_id = signature.pointer("/receipt/chat_id").and_then(Value::as_str);
+    let gateway_signed = id_confirmed
+        && signature.get("api_version").and_then(Value::as_str) == Some("aci/1")
+        && receipt_id == Some(reply.id.as_str())
+        && text.split_once(':').is_some_and(|(request, response)| hex64(request) && hex64(response));
     let bound = text == reply.cipher
         || text == reply.content_cipher
         || (id_confirmed && text == reply.plain.as_str())
         || text == format!("{request_hash}:{ciphertext_hash}")
         || text == format!("{request_hash}:{stream_hash}")
-        || text == format!("{request_hash}:{plain_hash}");
+        || text == format!("{request_hash}:{plain_hash}")
+        || gateway_signed;
     if !bound {
         return Err(Error::Signature);
     }
@@ -459,6 +472,27 @@ mod tests {
         assert!(authenticate_reply(&without_id, &attested, &reply, &request_hash, b"wire").is_err());
         let other_id = json!({"text":plain_text,"signature":hex::encode(&sig),"request_id":"old-id"});
         assert!(authenticate_reply(&other_id, &attested, &reply, &request_hash, b"wire").is_err());
+
+        // Venice's aci/1 gateway (live format, Nov 2026): gateway-side hashes we cannot recompute, accepted only with this
+        // request's id in the signature and in its receipt, and only when signed by the attested key
+        let gateway_text = format!("{}:{}", "8b".repeat(32), "2e".repeat(32));
+        let prefix = format!("\x19Ethereum Signed Message:\n{}", gateway_text.len());
+        let (sig, recovery) = signing
+            .sign_digest_recoverable(Keccak256::new().chain_update(prefix).chain_update(&gateway_text))
+            .unwrap();
+        let mut sig = sig.to_bytes().to_vec();
+        sig.push(recovery.to_byte());
+        let aci = |id: &str, receipt: &str| json!({"api_version":"aci/1","text":gateway_text,"signature":hex::encode(&sig),
+            "requested_request_id":id,"receipt":{"chat_id":receipt},"model":DEFAULT_MODEL});
+        assert!(authenticate_reply(&aci("fresh-id", "fresh-id"), &attested, &reply, &request_hash, b"wire").is_ok());
+        assert!(authenticate_reply(&aci("fresh-id", "old-id"), &attested, &reply, &request_hash, b"wire").is_err());
+        assert!(authenticate_reply(&aci("old-id", "old-id"), &attested, &reply, &request_hash, b"wire").is_err());
+        let mut no_receipt = aci("fresh-id", "fresh-id");
+        no_receipt.as_object_mut().unwrap().remove("receipt");
+        assert!(authenticate_reply(&no_receipt, &attested, &reply, &request_hash, b"wire").is_err());
+        let mut forged = aci("fresh-id", "fresh-id");
+        forged["text"] = json!(format!("{}:{}", "8b".repeat(32), "00".repeat(32))); // signature no longer matches
+        assert!(authenticate_reply(&forged, &attested, &reply, &request_hash, b"wire").is_err());
     }
     #[test]
     fn missing_trust_or_forged_attestation_never_sends_a_prompt() {

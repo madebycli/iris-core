@@ -105,6 +105,21 @@ for a live model roundtrip. Offline tests do not establish live compatibility or
 an independent audit of this integration. Required HTTPS origins are
 `api.venice.ai` and `pccs.phala.network`.
 
+## Live result (November 2026, aci/1)
+
+Checked against the live API with a real account (model `e2ee-gemma-4-26b-a4b-uncensored-p`):
+
+- Attestation passes locally: Intel TDX quote via dcap-qvl and Phala PCCS, TCB `UpToDate`, key and nonce binding. The
+  runtime fingerprint (MRTD, RTMR0-2) was the same across repeated requests.
+- The encrypted request and the encrypted stream work; the reply decrypts with the per-request key.
+- The signature endpoint now answers in Venice's `aci/1` format: `text` is `sha256(request):sha256(response)` as Venice's
+  gateway saw them, plus a receipt with the chat id and an event log. Measured: the request hash was identical for two
+  different encrypted requests, and the response hash does not match the stream Iris receives (Venice's API rewrites it
+  after the gateway). Venice itself documents both hashes as provider-reported.
+- Iris accepts such a signature only when the attested key signed it and both `requested_request_id` and
+  `receipt.chat_id` name this request. That proves the attested runtime signed a record for this completion. It does not
+  authenticate the reply's bytes; they stay confidential because they are encrypted to the per-request key.
+
 ## Live test with a real account
 
 Offline tests cannot prove that Venice's live formats match. Do this once with your own API key.
