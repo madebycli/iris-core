@@ -96,6 +96,35 @@ for a live model roundtrip. Offline tests do not establish live compatibility or
 an independent audit of this integration. Required HTTPS origins are
 `api.venice.ai` and `pccs.phala.network`.
 
+## Live test with a real account
+
+Offline tests cannot prove that Venice's live formats match. Do this once with your own API key.
+The key stays on the phone; nothing below needs it in a file, a chat or an issue.
+
+In the app (Settings → AI provider → Venice):
+
+1. Enter the API key and run **Verify connection and enclave**. Expected: an E2EE model list and
+   the approval dialog with MRTD and RTMR0–2. Approve.
+2. Ask a knowledge question ("Warum ist der Himmel blau?"). Expected: an answer, no error text.
+3. Ask for a very long answer ("Erkläre ausführlich die Geschichte Roms"). Expected: an answer, possibly cut short, never an error (the core keeps a cut-off reply; the app does not mark it yet).
+4. "Wie spät ist es?" and "äh hm": answered offline, no Venice usage in the Venice dashboard.
+5. "Erinnere mich morgen um 9 an zahnarzt termin machen": with confirmation on, Iris proposes a
+   clean title and a list, "ja" applies it, and the reminder still rings at 9.
+6. "Ich heiße Alex", a new session later "Weißt du noch wie ich heiße?": answered from the memory page.
+7. Forget the approved runtime and verify again: the dialog must appear again.
+
+If a step fails, capture without the key (`export VENICE_API_KEY=...` in your own shell only):
+
+```
+curl -sS -H "Authorization: Bearer $VENICE_API_KEY" \
+  "https://api.venice.ai/api/v1/tee/attestation?model=<model>&nonce=$(openssl rand -hex 32)" > attestation.json
+curl -sS -H "Authorization: Bearer $VENICE_API_KEY" "https://api.venice.ai/api/v1/models" > models.json
+```
+
+Share only the field names and structure of `attestation.json` (the quote itself is public evidence,
+but check it holds no account data), the app's error text and the step number. Never share the
+key, request headers or decrypted answers.
+
 Protocol sources: [Venice E2EE guide](https://docs.venice.ai/guides/features/tee-e2ee-models),
 [official CLI](https://github.com/veniceai/venice-cli),
 [DCAP verifier](https://github.com/Phala-Network/dcap-qvl).
