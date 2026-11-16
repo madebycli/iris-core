@@ -171,9 +171,14 @@ const EN: &[(&str, &str)] = &[
 pub fn worth_cloud(plan: &Plan, text: &str) -> bool {
     match plan {
         Plan::Knowledge => true,
-        Plan::Unknown | Plan::Suggest(_) => is_question(text) && word_count(text) >= 3,
+        Plan::Unknown | Plan::Suggest(_) => (is_question(text) || asks_to_explain(text)) && word_count(text) >= 3,
         Plan::Run(_) | Plan::Clarify(_, _) | Plan::Fragment => false,
     }
+}
+
+/// "Erzähl mir etwas über ...", "Nenn drei Flüsse", "Explain ...": a knowledge request without a question mark.
+fn asks_to_explain(text: &str) -> bool {
+    re(r"(?iu)^(?:bitte\s+)?(?:erzähl\w*|nenn\w*|erklär\w*|beschreib\w*|sag mir|übersetz\w*|fass\w* .* zusammen|tell me|explain|describe|name|list|give me|summari[sz]e|translate)\b").contains(text.trim())
 }
 
 /// A real conversation ("ich fühle mich heute mies, weil ...") goes to the online AI; a set phrase
@@ -192,6 +197,8 @@ mod cost_tests {
         assert!(!worth_cloud(&Plan::Unknown, "blau Fenster laufen Nudel"));
         assert!(!worth_cloud(&Plan::Unknown, "ähm also"));
         assert!(worth_cloud(&Plan::Unknown, "warum ist der Himmel blau"));
+        assert!(worth_cloud(&Plan::Unknown, "erzähl mir etwas über den Eiffelturm"));
+        assert!(worth_cloud(&Plan::Unknown, "Nenn drei Flüsse in Europa"));
         assert!(!worth_cloud(&Plan::Suggest(vec!["timer_set".into()]), "Timer Nudel Wasser"));
         assert!(!worth_cloud(&Plan::Fragment, "und dann?"));
         assert!(!worth_cloud(&Plan::Clarify("a".into(), "b".into()), "was meinst du"));

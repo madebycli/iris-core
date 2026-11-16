@@ -82,7 +82,19 @@ fn named_in(sentence: &str, list: &str) -> bool {
 /// A clock time or date in a title: those are the app's, the AI must not write them into the text.
 fn has_time(title: &str) -> bool {
     let lower = title.to_lowercase();
-    if lower.split(|c: char| !c.is_alphanumeric()).any(|w| w == "uhr" || w == "pm") {
+    const DATE_WORDS: [&str; 44] = [
+        "uhr", "pm", "heute", "morgen", "übermorgen", "gestern", "today", "tomorrow", "tonight", "yesterday",
+        "montag", "dienstag", "mittwoch", "donnerstag", "freitag", "samstag", "sonntag",
+        "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+        "januar", "februar", "märz", "april", "mai", "juni", "juli", "august", "september", "oktober", "november", "dezember",
+        "january", "february", "march", "june", "july", "october", "december", "wochenende",
+    ];
+    let words: Vec<&str> = lower.split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()).collect();
+    if words.iter().any(|w| DATE_WORDS.contains(w)) {
+        return true;
+    }
+    // "um 5", "am 12", "at 7": a clock time or day without separators
+    if words.windows(2).any(|p| matches!(p[0], "um" | "am" | "at" | "on" | "ab" | "bis") && p[1].chars().all(|c| c.is_ascii_digit())) {
         return true;
     }
     let c: Vec<char> = title.chars().collect();
@@ -153,7 +165,9 @@ pub fn request(text: &str) -> Option<&'static str> {
     if !verbs.iter().any(|v| t.starts_with(v)) {
         return None;
     }
-    let has = |words: &[&str]| words.iter().any(|w| t.contains(w));
+    // word starts only: "list" must not match "playlist", "note" not "notification"
+    let tokens: Vec<&str> = t.split(|c: char| !c.is_alphanumeric() && c != '-').filter(|w| !w.is_empty()).collect();
+    let has = |stems: &[&str]| tokens.iter().any(|w| stems.iter().any(|s| w.starts_with(s) || w.ends_with(&format!("{s}e")) || w.ends_with(&format!("{s}en")) || w.ends_with(s) && s.len() > 4));
     if has(&["erinnerung", "aufgabe", "task", "todo", "to-do", "reminder"]) {
         Some("reminder")
     } else if has(&["liste", "list"]) {
@@ -185,7 +199,7 @@ mod tests {
     #[test]
     fn times_and_dates_never_enter_a_title() {
         let d = [draft("reminder", "Hund raus", "")];
-        for t in ["Um 16:30 mit dem Hund raus", "Hund raus 16.30", "Hund raus um 4 Uhr"] {
+        for t in ["Um 16:30 mit dem Hund raus", "Hund raus 16.30", "Hund raus um 4 Uhr", "Zahnarzt morgen", "Hund raus am Dienstag", "Hund raus um 5", "Party im Dezember"] {
             assert!(apply(&json!({"entries":[{"id":"reminder-1","title":t}]}).to_string(), "Hund raus", &d, &[], false).is_empty(), "{t}");
         }
     }
@@ -234,6 +248,8 @@ mod tests {
         assert_eq!(request("ordne alles"), Some("all"));
         assert_eq!(request("Erinnere mich morgen an den Zahnarzt"), None);
         assert_eq!(request("ordne das Wetter"), None);
+        assert_eq!(request("sort my playlist"), None);
+        assert_eq!(request("sort my notifications"), None);
     }
 
     #[test]

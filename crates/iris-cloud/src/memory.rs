@@ -54,8 +54,10 @@ pub fn key_of(words: &str) -> Option<String> {
 fn upsert(entries: &mut Vec<Entry>, key: String, value: String) {
     entries.retain(|e| e.key != key);
     entries.push(Entry { key, value });
+    // full: the oldest numbered fact goes first, named entries ("name") only when there is no fact left
     while entries.len() > MAX_ENTRIES {
-        entries.remove(0);
+        let i = entries.iter().position(|e| e.key.starts_with("fact_")).unwrap_or(0);
+        entries.remove(i);
     }
 }
 
@@ -153,6 +155,14 @@ pub fn apply(entries: &[Entry], ops: &str) -> (Vec<Entry>, Vec<Applied>) {
 }
 
 const NAME_WORDS: [&str; 6] = ["heiße", "heisse", "heiß", "name", "called", "call"];
+const STOP: [&str; 34] = ["weißt", "weisst", "noch", "was", "wie", "wer", "wann", "wo", "ich", "mir", "mich", "mein", "meine", "meinen", "you", "know", "what", "when", "where", "remember", "the", "and", "und", "dir", "über", "about", "gemerkt", "kennst", "does", "did", "ist", "ein", "eine", "einen"];
+
+/// Whether a question asks about something specific (then nothing found means nothing known), or is
+/// general ("Was weißt du über mich?", which lists the memory).
+pub fn specific(question: &str) -> bool {
+    question.to_lowercase().split(|c: char| !c.is_alphanumeric()).filter(|w| w.chars().count() >= 3)
+        .any(|w| !STOP.contains(&w) && !matches!(w, "alles" | "everything" | "erinnerst" | "merken" | "gespeichert" | "stored" | "saved"))
+}
 
 /// The entries a question is about ("Weißt du noch, wie ich heiße?" finds `name`). Empty when none fits.
 pub fn recall(entries: &[Entry], question: &str) -> Vec<Entry> {
@@ -163,14 +173,15 @@ pub fn recall(entries: &[Entry], question: &str) -> Vec<Entry> {
         .map(str::to_string)
         .collect();
     let wants_name = words.iter().any(|w| NAME_WORDS.contains(&w.as_str()));
-    let stop = ["weißt", "weisst", "noch", "was", "wie", "wer", "ich", "mir", "mein", "meine", "meinen", "you", "know", "what", "remember", "the", "and", "und", "dir", "über", "about", "gemerkt", "kennst", "does", "did"];
+    let stop = STOP;
     entries
         .iter()
         .filter(|e| {
             (wants_name && e.key.contains("name"))
                 || words.iter().filter(|w| !stop.contains(&w.as_str())).any(|w| {
+                    // whole words: "ein" must not find "Bello, ein Labrador"
                     let k = key_of(w).unwrap_or_default();
-                    (!k.is_empty() && e.key.contains(&k)) || e.value.to_lowercase().contains(w.as_str())
+                    (!k.is_empty() && e.key.split('_').any(|part| part == k)) || e.value.to_lowercase().split(|c: char| !c.is_alphanumeric()).any(|v| v == w)
                 })
         })
         .cloned()
@@ -223,5 +234,8 @@ mod tests {
         assert_eq!(recall(&e, "Weißt du noch, wie ich heiße?")[0].value, "Ada");
         assert_eq!(recall(&e, "wie heißt mein Hund")[0].key, "hund");
         assert!(recall(&e, "wann ist mein Zahnarzttermin").is_empty());
+        assert!(specific("wann ist mein Zahnarzttermin") && !specific("Was weißt du über mich?"));
+        let full: String = (0..41).map(|i| format!("- fakt {i}\n")).collect::<String>() + "name: Ada\n";
+        assert!(parse(&full).iter().any(|x| x.key == "name"));
     }
 }

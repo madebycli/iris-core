@@ -154,3 +154,9 @@ pub fn memory_apply(text: String, ops: String) -> String {
 pub fn memory_recall(text: String, question: String) -> String {
     serde_json::to_string(&iris_cloud::memory::recall(&iris_cloud::memory::parse(&text), &question)).unwrap_or_else(|_| "[]".into())
 }
+
+/// Whether a memory question asks about something specific (nothing found then means nothing known).
+#[uniffi::export]
+pub fn memory_specific(question: String) -> bool {
+    iris_cloud::memory::specific(&question)
+}
