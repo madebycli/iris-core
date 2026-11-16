@@ -16,6 +16,7 @@ through the `Host` and `Store` traits, so the whole assistant runs and is tested
 crates/iris-core     pipeline, language packs, time expressions, Skill / Host / Store contracts
 crates/iris-skills   the built-in skills (Rust for logic, TOML for words)
 crates/iris-brain    the trained network (Rust around ONNX Runtime)
+crates/iris-cloud    opt-in Venice E2EE protocol, encryption and Intel TDX verification
 crates/iris-store    SQLite store (desktop, station, watch)
 crates/iris-ffi      UniFFI boundary for frontends (Kotlin bindings)
 crates/iris-cli      `iris` in a terminal, a fake phone, the spec runner
@@ -49,6 +50,12 @@ An app brings the device: it implements `Phone` (clock, settings, scheduling, st
 calendar) and links `iris-ffi`. `build-android.sh <app-main-dir>` builds the native library and
 the Kotlin bindings (needs `cargo-ndk` and an NDK). Read
 [docs/ARCHITECTURE_CORE.md](docs/ARCHITECTURE_CORE.md) for what is inside and what is not.
+
+## Optional encrypted AI
+
+The reusable Venice client lives in `iris-cloud` and is exported through `iris-ffi`.
+Gemma 4 E2EE is the default; online AI requires explicit consent, an API key and
+an approved runtime identity. See [the protocol and trust model](docs/VENICE_E2EE.md).
 
 ## License
 

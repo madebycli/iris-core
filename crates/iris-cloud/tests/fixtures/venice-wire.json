@@ -1,0 +1,6 @@
+{
+  "source": "Python cryptography ECDH(secp256k1), HKDF-SHA256, AESGCM; public test scalars 1 and 2",
+  "recipient_private_scalar": 2,
+  "plaintext": "Hello, Grüße",
+  "wire": "0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8000102030405060708090a0b910c1a8a0c2bc6d913059fe9a005ff6f43205484350214dcd21e9d19a8b0"
+}
