@@ -79,8 +79,9 @@ impl Host for FakeHost {
     fn zone(&self) -> String {
         self.0.lock().unwrap().zone.clone()
     }
-    fn has(&self, _capability: Capability) -> bool {
-        true
+    fn has(&self, capability: Capability) -> bool {
+        // without a clock app there is no alarm capability
+        !(capability == Capability::Alarm && self.0.lock().unwrap().clock_missing)
     }
     fn setting(&self, key: &str) -> Option<String> {
         self.0.lock().unwrap().settings.get(key).cloned()

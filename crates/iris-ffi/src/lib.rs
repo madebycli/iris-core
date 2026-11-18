@@ -241,6 +241,8 @@ struct UnderstandingJson<'a> {
 pub struct IrisCore {
     engine: Mutex<Engine>,
     brain: Arc<BrainSlot>,
+    /// The clock of the planning turn in progress: taken when the planner prompt is made, used to check its answer.
+    turn: Mutex<Option<(i64, String)>>,
 }
 
 #[uniffi::export]
@@ -251,7 +253,7 @@ impl IrisCore {
         let mut engine = iris_skills::engine(Arc::new(Bridge(phone.clone())), Arc::new(Bridge(phone))).expect("built-in skills are valid");
         let brain = Arc::new(BrainSlot::default());
         engine.set_classifier(Box::new(BrainClassifier(brain.clone())));
-        Arc::new(Self { engine: Mutex::new(engine), brain })
+        Arc::new(Self { engine: Mutex::new(engine), brain, turn: Mutex::new(None) })
     }
 
     /// Where the network is: a directory with `brain.onnx`, `meta.txt` and `pieces.tsv`, and the ONNX
@@ -322,19 +324,30 @@ impl IrisCore {
         .to_string()
     }
 
-    /// What the assistant is told to plan actions: the contract and this turn's clock. `None` for a language the
-    /// planner has no words for.
+    /// What the assistant is told to plan actions: the contract for the action families this phone can carry out, and
+    /// this turn's clock. The clock is kept, so `plan_validate` checks the answer against the same instant. `None`
+    /// for a language the planner has no words for, or when the phone can carry out none of the actions.
     pub fn plan_prompt(&self, lang: String) -> Option<String> {
-        let (now_ms, zone) = self.engine.lock().unwrap().turn_clock();
-        iris_core::plan::prompt(&lang, now_ms, &zone)
+        let (clock, families) = {
+            let engine = self.engine.lock().unwrap();
+            (engine.turn_clock(), engine.plan_families())
+        };
+        let prompt = iris_core::plan::prompt(&lang, clock.0, &clock.1, &families);
+        *self.turn.lock().unwrap() = prompt.is_some().then_some(clock);
+        prompt
     }
 
-    /// Checks the assistant's whole reply against the contract and this turn's clock. JSON: `{"kind":"actions",
-    /// "actions":[{"kind","sentence"}]}`, `{"kind":"ask","slot","question"}`, `{"kind":"not_action"}` or
-    /// `{"kind":"rejected","reason"}`. Nothing is carried out here: the host says each sentence to `process`.
+    /// Checks the assistant's whole reply against the contract, the turn's clock and what this phone can carry out.
+    /// JSON: `{"kind":"actions","actions":[{"kind","sentence"}]}`, `{"kind":"ask","slot","question"}`,
+    /// `{"kind":"not_action"}` or `{"kind":"rejected","reason"}`. Nothing is carried out here: the host says each
+    /// sentence to `process`.
     pub fn plan_validate(&self, raw: String, lang: String) -> String {
-        let (now_ms, zone) = self.engine.lock().unwrap().turn_clock();
-        serde_json::to_string(&iris_core::plan::validate(&raw, &lang, now_ms, &zone)).unwrap_or_default()
+        let (host_clock, families) = {
+            let engine = self.engine.lock().unwrap();
+            (engine.turn_clock(), engine.plan_families())
+        };
+        let (now_ms, zone) = turn_for_validation(self.turn.lock().unwrap().take(), host_clock);
+        serde_json::to_string(&iris_core::plan::validate(&raw, &lang, now_ms, &zone, &families)).unwrap_or_default()
     }
 
     /// The user dismissed the question the core waits on: it is dropped, and only it. Entries that exist stay.
@@ -366,5 +379,38 @@ impl IrisCore {
 
     pub fn languages(&self) -> Vec<String> {
         self.engine.lock().unwrap().languages()
+    }
+}
+
+/// How long the clock of a planning turn is kept: an answer that takes longer than this is checked against the
+/// current time instead.
+const TURN_CLOCK_TTL_MS: i64 = 10 * 60_000;
+
+/// The clock to check an answer against: the one the prompt was made with (one clock per turn), unless there was
+/// none, it is older than [`TURN_CLOCK_TTL_MS`], or the phone's clock went backwards.
+fn turn_for_validation(kept: Option<(i64, String)>, host: (i64, String)) -> (i64, String) {
+    match kept {
+        Some((at, zone)) if host.0 >= at && host.0 - at <= TURN_CLOCK_TTL_MS => (at, zone),
+        _ => host,
+    }
+}
+
+#[cfg(test)]
+mod turn_clock_tests {
+    use super::turn_for_validation;
+
+    #[test]
+    fn the_prompts_clock_is_the_one_the_answer_is_checked_with() {
+        let kept = Some((1_000_000, "Europe/Berlin".to_string()));
+        assert_eq!(turn_for_validation(kept, (1_020_000, "Europe/Berlin".into())), (1_000_000, "Europe/Berlin".into()));
+    }
+
+    #[test]
+    fn without_a_kept_clock_or_when_it_is_stale_the_current_time_is_used() {
+        let host = (50_000_000, "Europe/Berlin".to_string());
+        assert_eq!(turn_for_validation(None, host.clone()), host);
+        assert_eq!(turn_for_validation(Some((1_000, "UTC".into())), host.clone()), host);
+        // a clock that went backwards
+        assert_eq!(turn_for_validation(Some((60_000_000, "UTC".into())), host.clone()), host);
     }
 }

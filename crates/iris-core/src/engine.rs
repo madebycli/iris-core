@@ -132,6 +132,13 @@ impl Engine {
         (self.host.now_ms(), self.host.zone())
     }
 
+    /// The action families of the plan contract this host can carry out now: reminders and timers need scheduling,
+    /// alarms need the clock app, lists and notes live in the store.
+    pub fn plan_families(&self) -> crate::plan::Families {
+        let schedule = self.host.has(crate::host::Capability::Schedule);
+        crate::plan::Families { reminder: schedule, timer: schedule, alarm: self.host.has(crate::host::Capability::Alarm), list: true, note: true }
+    }
+
     pub fn has_question(&self) -> bool {
         self.pending.is_some()
     }

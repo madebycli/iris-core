@@ -46,8 +46,17 @@ except simple commands. A request put as a question ("kannst du eine Erinnerung 
 `plan`, not `talk`. An answer to an open question, a simple command ("Timer auf 5 Minuten", "Wie spät ist es") and a
 sentence of two words or fewer are always `local`. The words are data in `core/lang/plan/<code>.toml`.
 
-**The prompt.** `plan::prompt(lang, now_ms, zone)` gives the assistant the contract and the turn's clock (weekday,
-date, time, zone). Only the current sentence and this text leave the phone: no entries, contacts, calendar or memory.
+**The prompt.** `plan::prompt(lang, now_ms, zone, families)` gives the assistant the contract for the action families
+the host can carry out now (`Engine::plan_families`: reminders and timers need scheduling, alarms need the clock app,
+lists and notes live in the store) and the turn's clock (weekday, date, time, zone). The host sends this text and the
+current sentence. A host may add recent turns so that "nein, früher" can be resolved; Android adds the last two turns
+that are not personal (`SharedTurns`) and nothing else: no entries, contacts, calendar or memory. If the host can carry
+out no action, or the language has no planner words, there is no prompt and the sentence stays local.
+
+**One clock per turn.** The clock is fixed when the prompt is made (`plan_prompt` keeps it) and the answer is checked
+against that same instant (`plan_validate` takes it; after ten minutes, or if the phone's clock went backwards, the
+current time is used). A relative word the assistant turned into a fixed date is therefore judged against the clock it
+was given.
 
 **The reply.** One JSON object, in one of three forms:
 
@@ -65,7 +74,9 @@ Actions: `reminder.create {title,date,time}`, `alarm.set {time,date?}`, `timer.s
 **Validation (`plan::validate`).** Everything or nothing: one bad action rejects the whole proposal, and nothing is
 carried out before it is accepted. Rejected: another `version`, an unknown action type or unknown field, more than
 5 actions, a time or date that is not exactly `HH:MM` / `YYYY-MM-DD`, a date in the past or more than a year ahead, a
-reminder or dated alarm whose moment has passed (against the turn's clock in the host's zone), a timer outside 1 s to
+reminder or dated alarm whose moment is not more than a minute ahead of the turn's clock in the host's zone (it would
+be past, or be read as the next day's, by the time it is carried out), an action of a family the host cannot carry out
+(`unsupported`), a timer outside 1 s to
 24 h, and text that is empty, longer than 80 characters (note: 200), or holds control characters, sentence punctuation
 or brackets, so that a title cannot smuggle a second command into a sentence. An `ask` takes one of the slots `time`,
 `date`, `duration`, `title`, `list`; its question is the core's own sentence, not the assistant's text, and it never

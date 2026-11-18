@@ -26,7 +26,30 @@ const MAX_NOTE: usize = 200;
 const MAX_TIMER_SECONDS: u32 = 86_400;
 const MAX_DAYS_AHEAD: i64 = 366;
 const MAX_REPLY_BYTES: usize = 8 * 1024;
+/// A reminder or dated alarm must lie further ahead than this: the plan is checked against the turn's clock and
+/// carried out a few seconds later, and a moment that has passed by then would be understood as the next day's.
+const MIN_LEAD_MS: i64 = 60_000;
 const SLOTS: [&str; 5] = ["time", "date", "duration", "title", "list"];
+
+/// The action families the host can carry out now. The planner is told only these, and a proposal that uses another
+/// one is rejected: the contract is intersected with what the host supports.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Families {
+    pub reminder: bool,
+    pub alarm: bool,
+    pub timer: bool,
+    pub list: bool,
+    pub note: bool,
+}
+
+impl Families {
+    pub const ALL: Families = Families { reminder: true, alarm: true, timer: true, list: true, note: true };
+    pub const NONE: Families = Families { reminder: false, alarm: false, timer: false, list: false, note: false };
+
+    fn any(&self) -> bool {
+        self.reminder || self.alarm || self.timer || self.list || self.note
+    }
+}
 
 /// Where a sentence goes at a given level of AI use.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -78,6 +101,7 @@ impl Rejection {
     pub const PAST: &'static str = "past";
     pub const DURATION: &'static str = "duration";
     pub const SLOT: &'static str = "slot";
+    pub const UNSUPPORTED: &'static str = "unsupported";
     pub const LANGUAGE: &'static str = "language";
     pub const ZONE: &'static str = "zone";
 }
@@ -133,7 +157,10 @@ struct Render {
 
 #[derive(Deserialize)]
 struct PromptSource {
-    system: String,
+    head: String,
+    actions_title: String,
+    rules: String,
+    actions: HashMap<String, String>,
 }
 
 struct Pack {
@@ -145,7 +172,7 @@ struct Pack {
     format: Format,
     render: Render,
     ask: HashMap<String, String>,
-    system: String,
+    prompt: PromptSource,
 }
 
 const DE: &str = include_str!("../../../lang/plan/de.toml");
@@ -163,7 +190,7 @@ fn compile(source: &str) -> Pack {
         format: p.format,
         render: p.render,
         ask: p.ask,
-        system: p.prompt.system,
+        prompt: p.prompt,
     }
 }
 
@@ -234,15 +261,24 @@ pub fn route(level: u8, text: &str, lang: &str, open_question: bool) -> Route {
 
 // ---- the prompt -----------------------------------------------------------------------------------------
 
-/// What the assistant is told: the contract, and the turn's clock (today, the weekday, the time zone), so a
-/// relative word like "tomorrow" is turned into a fixed date against the same clock the core validates with.
-pub fn prompt(lang: &str, now_ms: i64, zone: &str) -> Option<String> {
+/// What the assistant is told: the contract for the action `families` the host supports, and the turn's clock (today,
+/// the weekday, the time zone), so a relative word like "tomorrow" is turned into a fixed date against the same clock
+/// the core validates with. `None` for a language without planner words or when the host supports no action at all.
+pub fn prompt(lang: &str, now_ms: i64, zone: &str, families: &Families) -> Option<String> {
     let p = pack(lang)?;
+    if !families.any() {
+        return None;
+    }
     let now = turn_clock(now_ms, zone)?;
     let weekday = p.format.weekdays.get(now.weekday().to_monday_zero_offset() as usize)?;
+    let lines: Vec<&str> = [("reminder", families.reminder), ("alarm", families.alarm), ("timer", families.timer), ("list", families.list), ("note", families.note)]
+        .iter()
+        .filter(|(_, on)| *on)
+        .filter_map(|(key, _)| p.prompt.actions.get(*key).map(String::as_str))
+        .collect();
+    let text = format!("{}\n{}\n{}\n{}", p.prompt.head, p.prompt.actions_title, lines.join("\n"), p.prompt.rules);
     Some(
-        p.system
-            .replace("{weekday}", weekday)
+        text.replace("{weekday}", weekday)
             .replace("{today}", &now.date().to_string())
             .replace("{zone}", zone)
             .replace("{time}", &now.strftime("%H:%M").to_string()),
@@ -290,9 +326,9 @@ enum RawAction {
 }
 
 /// Checks the whole proposal in `raw` (the assistant's reply, possibly wrapped in a code fence or a sentence)
-/// against the turn's clock `now_ms` in time zone `zone`, and turns valid actions into engine sentences in
-/// `lang`. Either everything is valid or nothing is carried out.
-pub fn validate(raw: &str, lang: &str, now_ms: i64, zone: &str) -> Outcome {
+/// against the turn's clock `now_ms` in time zone `zone` and the action `families` the host supports, and turns
+/// valid actions into engine sentences in `lang`. Either everything is valid or nothing is carried out.
+pub fn validate(raw: &str, lang: &str, now_ms: i64, zone: &str, families: &Families) -> Outcome {
     let Some(p) = pack(lang) else { return rejected(Rejection::LANGUAGE) };
     let Some(now) = turn_clock(now_ms, zone) else { return rejected(Rejection::ZONE) };
     if raw.len() > MAX_REPLY_BYTES {
@@ -330,7 +366,7 @@ pub fn validate(raw: &str, lang: &str, now_ms: i64, zone: &str) -> Outcome {
             Err(e) if e.to_string().contains("unknown variant") => return rejected(Rejection::UNKNOWN_ACTION),
             Err(_) => return rejected(Rejection::MALFORMED),
         };
-        match plan_one(p, &now, action) {
+        match plan_one(p, &now, families, action) {
             Ok(one) => planned.push(one),
             Err(reason) => return rejected(reason),
         }
@@ -345,7 +381,17 @@ fn extract_json(raw: &str) -> Option<&str> {
     (end > start).then(|| &raw[start..=end])
 }
 
-fn plan_one(p: &Pack, now: &Zoned, action: RawAction) -> Result<Planned, &'static str> {
+fn plan_one(p: &Pack, now: &Zoned, families: &Families, action: RawAction) -> Result<Planned, &'static str> {
+    let supported = match &action {
+        RawAction::ReminderCreate { .. } => families.reminder,
+        RawAction::AlarmSet { .. } => families.alarm,
+        RawAction::TimerSet { .. } => families.timer,
+        RawAction::ListAdd { .. } => families.list,
+        RawAction::NoteAdd { .. } => families.note,
+    };
+    if !supported {
+        return Err(Rejection::UNSUPPORTED);
+    }
     let fill = |template: &str, pairs: &[(&str, &str)]| {
         pairs.iter().fold(template.to_string(), |s, (k, v)| s.replace(&format!("{{{k}}}"), v))
     };
@@ -443,7 +489,7 @@ fn parse_date(s: &str, now: &Zoned) -> Result<Date, &'static str> {
 
 fn require_future(now: &Zoned, date: Date, time: Time) -> Result<(), &'static str> {
     let at = date.at(time.hour(), time.minute(), 0, 0).to_zoned(now.time_zone().clone()).map_err(|_| Rejection::TIME)?;
-    if at.timestamp() <= now.timestamp() {
+    if at.timestamp().as_millisecond() <= now.timestamp().as_millisecond() + MIN_LEAD_MS {
         return Err(Rejection::PAST);
     }
     Ok(())
@@ -473,14 +519,14 @@ mod tests {
     const Z: &str = "Europe/Berlin";
 
     fn sentences(raw: &str, lang: &str) -> Vec<String> {
-        match validate(raw, lang, now(), Z) {
+        match validate(raw, lang, now(), Z, &Families::ALL) {
             Outcome::Actions { actions } => actions.into_iter().map(|a| a.sentence).collect(),
             other => panic!("expected actions, got {other:?}"),
         }
     }
 
     fn reason(raw: &str) -> String {
-        match validate(raw, "de", now(), Z) {
+        match validate(raw, "de", now(), Z, &Families::ALL) {
             Outcome::Rejected { reason } => reason,
             other => panic!("expected a rejection, got {other:?}"),
         }
@@ -490,7 +536,7 @@ mod tests {
     fn the_language_data_is_valid() {
         for lang in languages() {
             assert!(pack(lang).is_some(), "{lang}");
-            assert!(prompt(lang, now(), Z).unwrap().contains("2026-11-18"));
+            assert!(prompt(lang, now(), Z, &Families::ALL).unwrap().contains("2026-11-18"));
         }
     }
 
@@ -544,7 +590,7 @@ mod tests {
 
     #[test]
     fn a_clarification_is_a_turn_of_its_own() {
-        match validate(r#"{"version":1,"ask":{"slot":"time"}}"#, "de", now(), Z) {
+        match validate(r#"{"version":1,"ask":{"slot":"time"}}"#, "de", now(), Z, &Families::ALL) {
             Outcome::Ask { slot, question } => assert_eq!((slot.as_str(), question.as_str()), ("time", "Um wie viel Uhr?")),
             other => panic!("{other:?}"),
         }
@@ -556,7 +602,7 @@ mod tests {
 
     #[test]
     fn not_a_task_is_passed_back() {
-        assert_eq!(validate(r#"{"version":1,"not_action":true}"#, "de", now(), Z), Outcome::NotAction);
+        assert_eq!(validate(r#"{"version":1,"not_action":true}"#, "de", now(), Z, &Families::ALL), Outcome::NotAction);
         assert_eq!(reason(r#"{"version":1,"not_action":true,"actions":[{"type":"note.add","text":"x"}]}"#), Rejection::MIXED);
     }
 
@@ -658,7 +704,36 @@ mod tests {
     #[test]
     fn a_language_without_planner_words_stays_local() {
         assert_eq!(route(4, "Dites-moi ce que vous pensez de cette idée", "fr", false), Route::Local);
-        assert!(prompt("fr", now(), Z).is_none());
-        assert_eq!(validate("{}", "fr", now(), Z), rejected(Rejection::LANGUAGE));
+        assert!(prompt("fr", now(), Z, &Families::ALL).is_none());
+        assert_eq!(validate("{}", "fr", now(), Z, &Families::ALL), rejected(Rejection::LANGUAGE));
+    }
+
+    #[test]
+    fn the_prompt_names_only_what_the_host_can_do() {
+        let no_clock = Families { alarm: false, ..Families::ALL };
+        let text = prompt("de", now(), Z, &no_clock).unwrap();
+        assert!(text.contains("reminder.create") && text.contains("timer.set") && !text.contains("alarm.set"));
+        assert!(!text.contains("Weckzeit"), "the hint of a family that is off must go with it");
+        let only_notes = Families { note: true, ..Families::NONE };
+        let text = prompt("en", now(), Z, &only_notes).unwrap();
+        assert!(text.contains("note.add") && !text.contains("reminder.create") && !text.contains("list.add"));
+        assert!(prompt("de", now(), Z, &Families::NONE).is_none());
+    }
+
+    #[test]
+    fn an_action_the_host_cannot_carry_out_rejects_the_whole_proposal() {
+        let no_clock = Families { alarm: false, ..Families::ALL };
+        let raw = r#"{"version":1,"actions":[{"type":"note.add","text":"Milch"},{"type":"alarm.set","time":"15:40","date":"2026-11-19"}]}"#;
+        assert_eq!(validate(raw, "de", now(), Z, &no_clock), rejected(Rejection::UNSUPPORTED));
+        assert!(matches!(validate(raw, "de", now(), Z, &Families::ALL), Outcome::Actions { .. }));
+    }
+
+    #[test]
+    fn a_moment_too_close_to_the_turn_clock_is_rejected() {
+        // 14:00 now: 14:01 is only a minute ahead and may be past by the time it is carried out; 14:02 is fine
+        let soon = r#"{"version":1,"actions":[{"type":"reminder.create","title":"Tee","date":"2026-11-18","time":"14:01"}]}"#;
+        assert_eq!(reason(soon), Rejection::PAST);
+        let ok = r#"{"version":1,"actions":[{"type":"reminder.create","title":"Tee","date":"2026-11-18","time":"14:02"}]}"#;
+        assert_eq!(sentences(ok, "de"), vec!["Erinnere mich um 14:02 Uhr an Tee"]);
     }
 }

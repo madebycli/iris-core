@@ -2,7 +2,7 @@
 //! the proposal says, and a dismissed question leaves what exists alone.
 
 use iris_cli::Session;
-use iris_core::plan::{self, Outcome};
+use iris_core::plan::{self, Families, Outcome};
 use iris_core::{Entry, EntryKind, ReplyKind};
 use jiff::Zoned;
 
@@ -16,7 +16,8 @@ fn ms(local: &str) -> i64 {
 
 /// Validates `raw`, says every sentence to the engine and returns the replies' text.
 fn run(s: &mut Session, raw: &str) -> Vec<String> {
-    let Outcome::Actions { actions } = plan::validate(raw, &s.lang, s.host.0.lock().unwrap().now_ms, "Europe/Berlin") else {
+    let families = s.engine.plan_families();
+    let Outcome::Actions { actions } = plan::validate(raw, &s.lang, s.host.0.lock().unwrap().now_ms, "Europe/Berlin", &families) else {
         panic!("not valid: {raw}")
     };
     actions.iter().map(|a| s.say(&a.sentence).text).collect()
@@ -69,7 +70,7 @@ fn every_kind_of_action_is_understood_by_the_engine_in_german_and_english() {
         for action in actions {
             // a fresh engine per action, so one that fails says which
             let raw = format!(r#"{{"version":1,"actions":[{action}]}}"#);
-            let outcome = plan::validate(&raw, lang, now(), "Europe/Berlin");
+            let outcome = plan::validate(&raw, lang, now(), "Europe/Berlin", &Families::ALL);
             let Outcome::Actions { actions } = outcome else { panic!("{lang}: {outcome:?}") };
             let mut s = Session::new(now(), "Europe/Berlin", lang);
             let reply = s.say(&actions[0].sentence);
@@ -122,4 +123,16 @@ fn dismissing_the_setup_of_a_timer_leaves_the_running_timers_alone() {
     assert_eq!(s.say("Stelle einen Timer").kind, ReplyKind::Question);
     assert!(s.engine.cancel_question());
     assert_eq!(titles(&s, EntryKind::Timer).len(), 2);
+}
+
+#[test]
+fn without_a_clock_app_the_plan_has_no_alarms() {
+    let s = Session::new(now(), "Europe/Berlin", "de");
+    s.host.0.lock().unwrap().clock_missing = true;
+    let families = s.engine.plan_families();
+    assert!(!families.alarm && families.reminder && families.timer && families.list && families.note);
+    let (now_ms, zone) = s.engine.turn_clock();
+    assert!(!plan::prompt("de", now_ms, &zone, &families).unwrap().contains("alarm.set"));
+    let raw = r#"{"version":1,"actions":[{"type":"alarm.set","time":"15:40","date":"2026-11-19"}]}"#;
+    assert_eq!(plan::validate(raw, "de", now_ms, &zone, &families), Outcome::Rejected { reason: "unsupported".into() });
 }
