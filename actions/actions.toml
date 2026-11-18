@@ -12,7 +12,7 @@
 
 # Labels of the local network for which it is authoritative at every level of AI use: one plain command with nothing
 # for an assistant to interpret. Inside a larger order the assistant may still propose the same action as a step.
-direct = ["flashlight_on", "flashlight_off", "music_pause", "music_next", "music_previous", "battery", "time", "date", "alarm_next", "alarm_list", "timer_query", "timer_cancel", "note_read", "list_read"]
+direct = ["flashlight_on", "flashlight_off", "music_pause", "music_next", "music_previous", "battery", "alarm_next", "alarm_list", "timer_query", "timer_cancel", "note_read", "list_read"]
 
 [[action]]
 id = "timer.set"

@@ -176,12 +176,13 @@ pub fn route(level: u8, text: &str, lang: &str, open_question: bool, direct: boo
         return Route::Local;
     }
     let reference = p.reference.is_match(text);
-    // A request put as a question is a command, not a question for the assistant to answer.
     // A request the local network is sure of and that has one part ("Taschenlampe an", "nächstes Lied") needs no
-    // interpretation at any level; the assistant may still propose the same action inside a larger plan.
-    if direct && !multi {
+    // interpretation at any level; the assistant may still propose the same action inside a larger plan. A question
+    // about earlier turns is no such command, whatever label the network gives its words.
+    if direct && !multi && !reference {
         return Route::Local;
     }
+    // A request put as a question is a command, not a question for the assistant to answer.
     let question = p.question.is_match(text) && !p.command.is_match(text);
     match level {
         2 => {
@@ -542,6 +543,8 @@ mod tests {
             assert_eq!(route(level, "Mach bitte mal die Taschenlampe an für mich", "de", false, true), Route::Local, "level {level}");
         }
         // inside a larger order the assistant is asked, and may propose the same action as a step
+        // a question about earlier turns stays a question, even if the network reads a command into its words
+        assert_eq!(route(2, "Ja, aber wann wollte ich den denn haben?", "de", false, true), Route::Talk);
         let mixed = "Mach die Taschenlampe an und danach stelle mir einen Timer auf zehn Minuten für die Nudeln bitte";
         assert_eq!(route(4, mixed, "de", false, true), Route::Plan);
     }
