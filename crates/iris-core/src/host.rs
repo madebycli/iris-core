@@ -25,6 +25,18 @@ pub enum Capability {
     Notifications,
     /// The camera's torch.
     Flashlight,
+    /// The contacts, to call someone.
+    Contacts,
+    /// A maps app that takes a destination.
+    Maps,
+    /// Controlling the media player and asking what plays.
+    Media,
+    /// Launching other apps.
+    Apps,
+    /// Weather data the user has set up.
+    Weather,
+    /// Reading the device calendar.
+    CalendarRead,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -201,11 +213,6 @@ pub trait Host: Send + Sync {
     }
     /// Notifications of other apps, newest first; `from` (may be empty) matches the app's name or the title.
     fn notifications(&self, _from: &str) -> Result<Vec<Notice>, HostError> {
-        Err(HostError::Unavailable)
-    }
-    /// Carries out an action of the plan contract that only the app can (`exec = "host"` in `actions.toml`) with its
-    /// checked arguments. Returns what to tell the user.
-    fn act(&self, _action: &str, _args: &serde_json::Value) -> Result<String, HostError> {
         Err(HostError::Unavailable)
     }
     /// Answers the notification `key` with `message` through its reply field.

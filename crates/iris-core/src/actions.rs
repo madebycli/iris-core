@@ -59,6 +59,10 @@ pub enum Kind {
     Text,
     Seconds,
     Int,
+    /// A decimal number within `min..=max`.
+    Number,
+    /// Arithmetic: digits, spaces and `+ - * / ^ ( ) . , %`, nothing else.
+    Expression,
     Date,
     Time,
     Enum,
@@ -132,6 +136,9 @@ impl Args<'_> {
     }
     pub fn int(&self, name: &str) -> Option<i64> {
         self.0.get(name)?.as_i64()
+    }
+    pub fn number(&self, name: &str) -> Option<f64> {
+        self.0.get(name)?.as_f64()
     }
     pub fn flag(&self, name: &str) -> Option<bool> {
         self.0.get(name)?.as_bool()
@@ -247,6 +254,21 @@ fn check_value(spec: &ArgSpec, raw: &Value, now: &Zoned) -> Result<Value, Reject
         Kind::Int => {
             let n = raw.as_i64().ok_or(Reject::Malformed)?;
             if n < spec.min.unwrap_or(i64::MIN) || n > spec.max.unwrap_or(i64::MAX) {
+                return Err(Reject::Number);
+            }
+            Ok(json!(n))
+        }
+        Kind::Expression => {
+            let t = raw.as_str().ok_or(Reject::Malformed)?.trim();
+            let ok = !t.is_empty() && t.chars().count() <= spec.max.unwrap_or(80) as usize && t.chars().all(|c| c.is_ascii_digit() || " +-*/^().,%×÷".contains(c));
+            if !ok {
+                return Err(Reject::Text);
+            }
+            Ok(json!(t))
+        }
+        Kind::Number => {
+            let n = raw.as_f64().filter(|n| n.is_finite()).ok_or(Reject::Malformed)?;
+            if n < spec.min.unwrap_or(-1_000_000_000) as f64 || n > spec.max.unwrap_or(1_000_000_000) as f64 {
                 return Err(Reject::Number);
             }
             Ok(json!(n))

@@ -12,7 +12,7 @@
 
 # Labels of the local network for which it is authoritative at every level of AI use: one plain command with nothing
 # for an assistant to interpret. Inside a larger order the assistant may still propose the same action as a step.
-direct = ["flashlight_on", "flashlight_off", "music_pause", "music_next", "music_previous", "battery", "alarm_next", "alarm_list", "timer_query", "timer_cancel", "note_read", "list_read"]
+direct = ["flashlight_on", "flashlight_off", "music_pause", "music_next", "music_previous", "music_play", "battery", "alarm_next", "alarm_list", "timer_query", "timer_cancel", "note_read", "list_read", "open_app", "call", "navigation", "weather", "calendar_query", "day_overview", "calculator", "joke"]
 
 [[action]]
 id = "timer.set"
@@ -54,7 +54,7 @@ id = "alarm.set"
 exec = "skill:alarm"
 need = ["alarm"]
 moment = ["date", "time", true]
-args = [{ name = "time", kind = "time", required = true }, { name = "date", kind = "date" }]
+args = [{ name = "time", kind = "time", required = true }, { name = "date", kind = "date" }, { name = "repeat", kind = "enum", values = ["daily", "weekdays", "weekly"] }]
 
 [[action]]
 id = "alarm.next"
@@ -80,7 +80,7 @@ id = "reminder.create"
 exec = "skill:reminder"
 need = ["schedule"]
 moment = ["date", "time", false]
-args = [{ name = "title", kind = "text", required = true, max = 80 }, { name = "date", kind = "date", required = true }, { name = "time", kind = "time", required = true }]
+args = [{ name = "title", kind = "text", required = true, max = 80 }, { name = "date", kind = "date", required = true }, { name = "time", kind = "time", required = true }, { name = "repeat", kind = "enum", values = ["daily", "weekdays", "weekly"] }]
 
 [[action]]
 id = "reminder.show"
@@ -178,3 +178,128 @@ id = "flashlight.set"
 exec = "host"
 need = ["flashlight"]
 args = [{ name = "on", kind = "bool", required = true }]
+
+[[action]]
+id = "reminder.snooze"
+exec = "skill:reminder"
+need = ["schedule"]
+args = [{ name = "seconds", kind = "seconds", min = 60, max = 86400 }]
+
+[[action]]
+id = "clock.time"
+exec = "skill:clock"
+args = []
+
+[[action]]
+id = "clock.date"
+exec = "skill:clock"
+args = []
+
+[[action]]
+id = "stopwatch.start"
+exec = "skill:stopwatch"
+args = []
+
+[[action]]
+id = "stopwatch.stop"
+exec = "skill:stopwatch"
+args = []
+
+[[action]]
+id = "stopwatch.reset"
+exec = "skill:stopwatch"
+args = []
+
+[[action]]
+id = "stopwatch.show"
+exec = "skill:stopwatch"
+args = []
+
+[[action]]
+id = "convert.units"
+exec = "skill:convert"
+args = [{ name = "value", kind = "number", required = true }, { name = "from", kind = "text", required = true, max = 40 }, { name = "to", kind = "text", required = true, max = 40 }]
+
+[[action]]
+id = "search.web"
+exec = "skill:device"
+need = ["device"]
+args = [{ name = "query", kind = "text", required = true, max = 120 }]
+
+[[action]]
+id = "music.playing"
+exec = "skill:device"
+need = ["media"]
+args = []
+
+[[action]]
+id = "notification.read"
+exec = "skill:device"
+need = ["notifications"]
+args = [{ name = "from", kind = "text", max = 60 }]
+
+[[action]]
+id = "notification.reply"
+exec = "skill:device"
+need = ["notifications"]
+confirm = true
+args = [{ name = "message", kind = "text", required = true, max = 200 }, { name = "from", kind = "text", max = 60 }]
+
+# ---- steps only the app can carry out (exec = "host"): the plan hands them to Android with their checked values ----
+
+[[action]]
+id = "music.control"
+exec = "host"
+need = ["media"]
+args = [{ name = "action", kind = "enum", required = true, values = ["play", "pause", "next", "previous"] }, { name = "query", kind = "text", max = 80 }]
+
+[[action]]
+id = "app.open"
+exec = "host"
+need = ["apps"]
+args = [{ name = "app", kind = "text", required = true, max = 60 }]
+
+[[action]]
+id = "navigation.start"
+exec = "host"
+need = ["maps"]
+args = [{ name = "place", kind = "text", required = true, max = 120 }]
+
+[[action]]
+id = "call.start"
+exec = "host"
+need = ["contacts"]
+args = [{ name = "contact", kind = "text", required = true, max = 60 }]
+
+[[action]]
+id = "weather.show"
+exec = "host"
+need = ["weather"]
+args = [{ name = "date", kind = "date" }, { name = "place", kind = "text", max = 60 }]
+
+[[action]]
+id = "calendar.show"
+exec = "host"
+need = ["calendar_read"]
+args = [{ name = "date", kind = "date" }, { name = "days", kind = "int", min = 1, max = 14 }]
+
+[[action]]
+id = "day.overview"
+exec = "host"
+need = ["weather"]
+args = [{ name = "tomorrow", kind = "bool" }]
+
+[[action]]
+id = "battery.show"
+exec = "host"
+args = []
+
+[[action]]
+id = "calculator.compute"
+exec = "host"
+args = [{ name = "expression", kind = "expression", required = true, max = 80 }]
+
+[[action]]
+id = "joke.tell"
+exec = "host"
+args = []

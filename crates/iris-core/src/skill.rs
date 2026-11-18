@@ -153,9 +153,16 @@ pub struct Cx<'a> {
     pub(crate) ask: Option<(String, serde_json::Value)>,
     pub(crate) ids: &'a mut u64,
     pub(crate) restore: Vec<String>,
+    pub(crate) proceed: bool,
 }
 
 impl Cx<'_> {
+    /// The step the user just confirmed was carried out: a plan that waited for this answer may go on. A "no", a
+    /// failure or anything unclear does not call this, and the rest of the plan is dropped.
+    pub fn proceed(&mut self) {
+        self.proceed = true;
+    }
+
     /// Park a question: the next utterance comes back to this skill as `intent`, with `state`.
     pub fn ask(&mut self, intent: &str, state: serde_json::Value) {
         self.ask = Some((intent.to_string(), state));

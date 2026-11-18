@@ -1,3 +1,4 @@
+#![recursion_limit = "512"]
 //! The action plan against the real engine: every action of the registry reaches its own executor with the values
 //! the plan checked (no sentence is read again), does what it says in German and English, and a dismissed question
 //! leaves what exists alone. One test per family; `every_action_of_the_registry_has_a_test_here` keeps the list honest.
@@ -263,11 +264,13 @@ fn the_phone_is_changed_with_the_checked_values() {
 }
 
 #[test]
-fn the_flashlight_goes_to_the_app_with_its_checked_value() {
+fn a_step_only_the_app_can_do_is_handed_over_with_its_checked_values() {
     let mut s = session("de");
-    done(&one(&mut s, json!({"type":"flashlight.set","on":true})));
-    let acted = s.host.0.lock().unwrap().acted.clone();
-    assert_eq!(acted, vec![("flashlight.set".to_string(), json!({"on": true}))]);
+    let actions: Vec<(String, serde_json::Map<String, Value>)> = checked(&s, json!([{"type":"flashlight.set","on":true}])).into_iter().map(|a| (a.id, a.args)).collect();
+    let r = s.engine.plan_run(actions, "de");
+    let host = r.host.expect("the step goes to the app");
+    assert_eq!((host.action.as_str(), host.args["on"].clone()), ("flashlight.set", json!(true)));
+    assert_eq!(r.left, 0);
 }
 
 // ---- task app and calendar --------------------------------------------------------------------------------
@@ -316,12 +319,24 @@ fn every_action_of_the_registry_has_an_executor_that_knows_it() {
         "note.add": {"text":"x"}, "note.show": {}, "note.remove": {"text":"x"},
         "device.volume": {"change":"up"}, "device.brightness": {"change":"up"}, "device.sound_mode": {"mode":"ring"}, "device.dnd": {"on":false},
         "task.create": {"title":"x"}, "calendar.event": {"title":"x","date":"2026-11-19","time":"16:00"}, "flashlight.set": {"on":false},
+        "reminder.snooze": {}, "clock.time": {}, "clock.date": {},
+        "stopwatch.start": {}, "stopwatch.stop": {}, "stopwatch.reset": {}, "stopwatch.show": {},
+        "convert.units": {"value":5,"from":"meilen","to":"kilometer"}, "search.web": {"query":"Kürbissuppe"}, "music.playing": {},
+        "notification.read": {}, "notification.reply": {"message":"Bin gleich da"},
+        "music.control": {"action":"pause"}, "app.open": {"app":"Spotify"}, "navigation.start": {"place":"Köln"}, "call.start": {"contact":"Mama"},
+        "weather.show": {}, "calendar.show": {}, "day.overview": {}, "battery.show": {}, "calculator.compute": {"expression":"2 + 3"}, "joke.tell": {},
     });
     for a in registry().all() {
         let sample = samples.get(&a.id).unwrap_or_else(|| panic!("no sample for {}", a.id));
         let mut s = session("de");
         let mut action = sample.clone();
         action["type"] = json!(a.id);
+        if a.skill().is_none() {
+            // an action of the app is handed to it: the plan stops there with the step in `host`
+            let step = checked(&s, json!([action])).into_iter().map(|c| (c.id, c.args)).collect();
+            assert_eq!(s.engine.plan_run(step, "de").host.map(|h| h.action), Some(a.id.clone()), "{} is not handed to the app", a.id);
+            continue;
+        }
         let r = one(&mut s, action);
         assert_ne!(r.kind, ReplyKind::Unhandled, "{} is not known to its executor", a.id);
     }
@@ -334,4 +349,195 @@ fn every_action_of_the_registry_has_a_test_here() {
     for a in registry().all() {
         assert!(source.contains(&format!("\"{}\"", a.id)), "no test mentions {}", a.id);
     }
+}
+
+// ---- the actions added for the rest of what Iris can do -------------------------------------------------
+
+#[test]
+fn the_clock_the_stopwatch_and_unit_conversion_answer() {
+    for (lang, from, to) in [("de", "meilen", "kilometer"), ("en", "miles", "kilometers")] {
+        let mut s = session(lang);
+        let r = one(&mut s, json!({"type":"clock.time"}));
+        done(&r);
+        assert!(r.text.contains("14"), "{lang}: {}", r.text);
+        done(&one(&mut s, json!({"type":"clock.date"})));
+        done(&one(&mut s, json!({"type":"stopwatch.start"})));
+        done(&one(&mut s, json!({"type":"stopwatch.stop"})));
+        done(&one(&mut s, json!({"type":"stopwatch.show"})));
+        done(&one(&mut s, json!({"type":"stopwatch.reset"})));
+        let r = one(&mut s, json!({"type":"convert.units","value":5,"from":from,"to":to}));
+        done(&r);
+        assert!(r.text.contains("8"), "{lang}: {}", r.text);
+        assert_eq!(one(&mut s, json!({"type":"convert.units","value":5,"from":"zork","to":to})).kind, ReplyKind::Failed, "{lang}");
+    }
+}
+
+#[test]
+fn repeating_alarms_and_reminders_keep_their_repeat() {
+    let mut s = session("de");
+    done(&one(&mut s, json!({"type":"alarm.set","time":"06:30","repeat":"weekdays"})));
+    let alarms = s.host.0.lock().unwrap().alarms.clone();
+    assert_eq!(alarms[0].days, vec![1, 2, 3, 4, 5]);
+    done(&one(&mut s, json!({"type":"reminder.create","title":"Tabletten","date":"2026-11-19","time":"08:00","repeat":"daily"})));
+    assert_eq!(all(&s, EntryKind::Reminder)[0].repeat, "daily");
+}
+
+#[test]
+fn a_reminder_that_just_rang_is_snoozed_by_the_given_time() {
+    let mut s = session("de");
+    done(&one(&mut s, json!({"type":"reminder.create","title":"Oma anrufen","date":"2026-11-19","time":"09:00"})));
+    done(&one(&mut s, json!({"type":"reminder.snooze","seconds":900})));
+    let r = all(&s, EntryKind::Reminder);
+    assert_eq!(r.len(), 1);
+    assert_eq!(r[0].due_at, Some(now() + 900_000));
+}
+
+#[test]
+fn a_web_search_and_what_plays_and_notifications() {
+    use iris_core::DeviceAction;
+    let mut s = session("de");
+    done(&one(&mut s, json!({"type":"search.web","query":"Rezept Kürbissuppe"})));
+    assert_eq!(s.host.0.lock().unwrap().device, vec![DeviceAction::WebSearch { query: "Rezept Kürbissuppe".into() }]);
+    // the fake phone has no player: it says so instead of inventing an answer; it has no notifications either
+    assert_eq!(one(&mut s, json!({"type":"music.playing"})).kind, ReplyKind::Failed);
+    done(&one(&mut s, json!({"type":"notification.read"})));
+}
+
+#[test]
+fn a_reply_to_a_notification_always_asks_before_it_sends() {
+    let mut s = session("de");
+    let r = one(&mut s, json!({"type":"notification.reply","message":"Bin gleich da","from":"Anna"}));
+    // no notification to answer here: nothing is sent
+    assert_eq!(r.kind, ReplyKind::Failed, "{}", r.text);
+}
+
+// ---- a plan that waits for a confirmation goes on exactly once ------------------------------------------------
+
+fn plan_of(s: &Session, actions: Value) -> Vec<(String, serde_json::Map<String, Value>)> {
+    checked(s, actions).into_iter().map(|a| (a.id, a.args)).collect()
+}
+
+/// "Leg morgen um 16:30 einen Termin an und erinnere mich 30 Minuten vorher."
+fn event_and_reminder() -> Value {
+    json!([
+        {"type":"calendar.event","title":"Zahnarzt","date":"2026-11-19","time":"16:30"},
+        {"type":"reminder.create","title":"Zahnarzt","date":"2026-11-19","time":"16:00"}])
+}
+
+#[test]
+fn after_a_yes_the_event_and_the_reminder_exist_exactly_once() {
+    for (lang, yes) in [("de", "Ja"), ("en", "Yes")] {
+        let mut s = session(lang);
+        let actions = plan_of(&s, event_and_reminder());
+        let asked = s.engine.plan_run(actions, lang);
+        assert_eq!(asked.kind, ReplyKind::Question, "{lang}: {}", asked.text);
+        assert_eq!(asked.left, 1);
+        assert!(s.host.0.lock().unwrap().events.is_empty() && all(&s, EntryKind::Reminder).is_empty(), "{lang}: nothing before the answer");
+        let answered = s.say(yes);
+        assert_eq!(answered.kind, ReplyKind::Done, "{lang}: {}", answered.text);
+        let events = s.host.0.lock().unwrap().events.clone();
+        assert_eq!((events.len(), events[0].start_at), (1, ms("2026-11-19T16:30")), "{lang}");
+        let reminders = all(&s, EntryKind::Reminder);
+        assert_eq!((reminders.len(), reminders[0].due_at), (1, Some(ms("2026-11-19T16:00"))), "{lang}");
+        // a second yes starts nothing again
+        s.say(yes);
+        assert_eq!(s.host.0.lock().unwrap().events.len(), 1, "{lang}");
+        assert_eq!(all(&s, EntryKind::Reminder).len(), 1, "{lang}");
+    }
+}
+
+#[test]
+fn a_no_a_let_it_be_or_an_expired_question_starts_nothing() {
+    for answer in ["Nein", "Lassen wir's", "Abbrechen"] {
+        let mut s = session("de");
+        let actions = plan_of(&s, event_and_reminder());
+        s.engine.plan_run(actions, "de");
+        s.say(answer);
+        assert!(s.host.0.lock().unwrap().events.is_empty(), "{answer}");
+        assert!(all(&s, EntryKind::Reminder).is_empty(), "{answer}: the waiting step must not start");
+        // and the dropped step does not come back with a later yes
+        s.say("Ja");
+        assert!(all(&s, EntryKind::Reminder).is_empty(), "{answer}");
+    }
+    // expired: the question is gone after its time, so a late yes answers nothing and nothing starts
+    let mut s = session("de");
+    let actions = plan_of(&s, event_and_reminder());
+    s.engine.plan_run(actions, "de");
+    s.host.0.lock().unwrap().now_ms += s.engine.question_ttl_ms + 1_000;
+    s.say("Ja");
+    assert!(s.host.0.lock().unwrap().events.is_empty());
+    assert!(all(&s, EntryKind::Reminder).is_empty());
+}
+
+#[test]
+fn another_request_instead_of_the_answer_drops_the_waiting_step() {
+    let mut s = session("de");
+    let actions = plan_of(&s, event_and_reminder());
+    s.engine.plan_run(actions, "de");
+    done(&s.say("Stelle einen Timer auf 5 Minuten"));
+    s.say("Ja");
+    assert!(all(&s, EntryKind::Reminder).is_empty());
+    assert!(s.host.0.lock().unwrap().events.is_empty());
+}
+
+#[test]
+fn an_unclear_result_of_the_confirmed_step_does_not_start_the_rest() {
+    let mut s = session("de");
+    let actions = plan_of(&s, event_and_reminder());
+    s.engine.plan_run(actions, "de");
+    // the calendar cannot be written: the confirmed step fails, so the reminder after it must not start
+    s.host.0.lock().unwrap().calendar_down = true;
+    let r = s.say("Ja");
+    assert_eq!(r.kind, ReplyKind::Failed, "{}", r.text);
+    assert!(all(&s, EntryKind::Reminder).is_empty());
+}
+
+#[test]
+fn dismissing_the_question_drops_the_waiting_steps_too() {
+    let mut s = session("de");
+    let actions = plan_of(&s, event_and_reminder());
+    s.engine.plan_run(actions, "de");
+    assert!(s.engine.cancel_question());
+    s.say("Ja");
+    assert!(all(&s, EntryKind::Reminder).is_empty());
+}
+
+#[test]
+fn steps_of_the_app_continue_in_order_and_a_failed_one_ends_the_plan() {
+    let mut s = session("de");
+    let actions = plan_of(&s, json!([
+        {"type":"timer.set","seconds":600,"label":"Nudeln"},
+        {"type":"flashlight.set","on":true},
+        {"type":"note.add","text":"Licht an"}]));
+    let first = s.engine.plan_run(actions, "de");
+    assert_eq!(first.host.as_ref().map(|h| h.action.as_str()), Some("flashlight.set"));
+    assert_eq!((all(&s, EntryKind::Timer).len(), all(&s, EntryKind::Note).len(), first.left), (1, 0, 1));
+    // the app did it: the note follows, once
+    let rest = s.engine.plan_continue(true, "de");
+    assert_eq!(rest.kind, ReplyKind::Done);
+    assert_eq!(all(&s, EntryKind::Note).len(), 1);
+    assert_eq!(s.engine.plan_continue(true, "de").text, "", "nothing is left to run twice");
+    assert_eq!(all(&s, EntryKind::Note).len(), 1);
+    // a step of the app that did not work drops the rest and says how many were left
+    let mut t = session("de");
+    let actions = plan_of(&t, json!([{"type":"flashlight.set","on":true},{"type":"timer.set","seconds":60},{"type":"note.add","text":"x"}]));
+    assert!(t.engine.plan_run(actions, "de").host.is_some());
+    let end = t.engine.plan_continue(false, "de");
+    assert_eq!((end.kind, end.left), (ReplyKind::Failed, 2));
+    assert!(end.text.contains("2"), "{}", end.text);
+    assert!(all(&t, EntryKind::Timer).is_empty() && all(&t, EntryKind::Note).is_empty());
+}
+
+#[test]
+fn a_question_of_the_app_holds_the_rest_until_it_is_answered_or_dropped() {
+    let mut s = session("de");
+    let actions = plan_of(&s, json!([{"type":"call.start","contact":"Mama"},{"type":"note.add","text":"Mama angerufen"}]));
+    assert!(s.engine.plan_run(actions, "de").host.is_some());
+    s.engine.plan_wait();
+    // other speech in the core does not touch a step that waits for the app
+    done(&s.say("Wie spät ist es"));
+    assert!(all(&s, EntryKind::Note).is_empty());
+    assert_eq!(s.engine.plan_drop(), 1);
+    assert_eq!(s.engine.plan_continue(true, "de").text, "");
+    assert!(all(&s, EntryKind::Note).is_empty());
 }

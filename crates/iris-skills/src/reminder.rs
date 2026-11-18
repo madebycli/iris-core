@@ -32,9 +32,19 @@ impl Skill for Reminder {
         Some(match action {
             "reminder.create" => {
                 let draft = Draft { title: title?, ..Draft::default() };
-                save(cx, &draft, &Resolved { at: at?, date_only: false, assumed_half_day: false, repeat: None })
+                let repeat = match args.text("repeat") {
+                    Some("daily") => Some(iris_core::time::Repeat::Daily),
+                    Some("weekdays") => Some(iris_core::time::Repeat::Weekdays),
+                    Some("weekly") => Some(iris_core::time::Repeat::Weekly),
+                    _ => None,
+                };
+                save(cx, &draft, &Resolved { at: at?, date_only: false, assumed_half_day: false, repeat })
             }
             "reminder.show" => list(cx),
+            "reminder.snooze" => match snooze_by(cx, args.int("seconds").unwrap_or(600)) {
+                Some(reply) => reply,
+                None => Reply::failed(cx.msg("not_found", &[])),
+            },
             "reminder.delete" => match picked(cx, &title?) {
                 Ok(entry) => {
                     cx.host.unschedule(&entry.id);
@@ -275,7 +285,10 @@ fn write_event(cx: &mut Cx) -> Reply {
     let minutes = cx.state["minutes"].as_u64().unwrap_or(30) as u32;
     let when = jiff::Timestamp::from_millisecond(start_at).map(|t| describe(t, &cx.now, cx.lang, false)).unwrap_or_default();
     match cx.host.create_event(&ExternalEvent { title: title.clone(), start_at, minutes, repeat: String::new() }) {
-        Ok(calendar) => Reply::done(cx.msg("created_calendar", &[("title", &title), ("when", &when), ("calendar", &calendar)])),
+        Ok(calendar) => {
+            cx.proceed();
+            Reply::done(cx.msg("created_calendar", &[("title", &title), ("when", &when), ("calendar", &calendar)]))
+        }
         Err(_) => Reply::failed(cx.msg("calendar_unreachable", &[])),
     }
 }
@@ -350,7 +363,6 @@ fn relocate(cx: &mut Cx, target: Entry, at: jiff::Timestamp) -> Reply {
 
 /// "Erinnere mich in 10 Minuten nochmal": the reminder that just rang, again later (ten minutes unless said).
 fn snooze(cx: &mut Cx) -> Option<Reply> {
-    const WINDOW_MS: i64 = 30 * 60_000;
     let found = scan(&cx.utt.norms(), cx.lang);
     // a sentence that names a new thing to be reminded of is a new reminder
     let free: Vec<usize> = (0..cx.utt.len()).filter(|i| !found.used[*i]).collect();
@@ -358,9 +370,14 @@ fn snooze(cx: &mut Cx) -> Option<Reply> {
     if !title.is_empty() {
         return Some(create(cx, Draft::default()));
     }
+    snooze_by(cx, found.expr.relative_secs.unwrap_or(600))
+}
+
+/// The reminder that just rang (or was made last), again after `secs` seconds. `None` when there is none.
+fn snooze_by(cx: &mut Cx, secs: i64) -> Option<Reply> {
+    const WINDOW_MS: i64 = 30 * 60_000;
     let id = cx.recall("fired", WINDOW_MS).or_else(|| cx.recall("last", WINDOW_MS))?;
     let entry = cx.store.get(&id)?;
-    let secs = found.expr.relative_secs.unwrap_or(600);
     let at = cx.now.timestamp().checked_add(jiff::ToSpan::seconds(secs)).ok()?;
     let mut again = if entry.repeat.is_empty() {
         entry.clone()

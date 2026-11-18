@@ -30,9 +30,6 @@ pub trait Phone: Send + Sync {
     /// `notifications`, `http`, `location`. The planner leaves out the actions the phone cannot carry out.
     fn has_capability(&self, name: String) -> bool;
 
-    /// Carries out an action only the app can (`flashlight.set`) with its checked arguments (JSON object). Returns what
-    /// to tell the user, or `None` when it could not be done.
-    fn act(&self, action: String, args: String) -> Option<String>;
 
     /// The lists of the user's task app as JSON `[{"id","name"}]`; `None` when there is no such app.
     fn task_lists(&self) -> Option<String>;
@@ -86,9 +83,6 @@ impl Host for Bridge {
     }
     fn setting(&self, key: &str) -> Option<String> {
         self.0.setting(key.to_string())
-    }
-    fn act(&self, action: &str, args: &serde_json::Value) -> Result<String, HostError> {
-        self.0.act(action.to_string(), args.to_string()).ok_or(HostError::Unavailable)
     }
     fn schedule(&self, entry: &Entry) -> Result<(), HostError> {
         let json = serde_json::to_string(entry).map_err(|e| HostError::Failed(e.to_string()))?;
@@ -323,15 +317,38 @@ impl IrisCore {
         serde_json::to_string(&reply).unwrap_or_default()
     }
 
-    /// Carries out one action of an accepted plan: `action` (`timer.set`) and `args` (JSON object) exactly as
-    /// `plan_validate` returned them, with the executor the registry names. Nothing is read again from text. Same
-    /// reply JSON as `process`; `unhandled` means nothing was done.
-    pub fn execute_action(&self, action: String, args: String, lang: String) -> String {
-        let Ok(serde_json::Value::Object(args)) = serde_json::from_str::<serde_json::Value>(&args) else {
+    /// Runs the actions of an accepted plan: `actions` is the `actions` array `plan_validate` returned. Core actions run
+    /// here, with their checked values. The reply (same JSON as `process`) stops the run where it must: a question of
+    /// the core (the rest waits for the answer: a "yes" goes on once, anything else drops it), a step only the app can
+    /// do (`host`: `{"action","args"}`; the rest waits for `plan_continue`), or the first action that did not work
+    /// (`left` counts the steps that did not run). Nothing is carried out twice.
+    pub fn plan_run(&self, actions: String, lang: String) -> String {
+        let Ok(serde_json::Value::Array(list)) = serde_json::from_str::<serde_json::Value>(&actions) else {
             return serde_json::to_string(&iris_core::Reply::new(iris_core::ReplyKind::Unhandled, "")).unwrap_or_default();
         };
-        let reply = self.engine.lock().unwrap().execute(&action, &args, &lang);
+        let steps: Vec<(String, serde_json::Map<String, serde_json::Value>)> = list
+            .into_iter()
+            .filter_map(|a| Some((a.get("id")?.as_str()?.to_string(), a.get("args")?.as_object()?.clone())))
+            .collect();
+        let reply = self.engine.lock().unwrap().plan_run(steps, &lang);
         serde_json::to_string(&reply).unwrap_or_default()
+    }
+
+    /// The app reports how the step it was given went (`ok`): the plan goes on, or the rest is dropped. Same reply JSON.
+    pub fn plan_continue(&self, ok: bool, lang: String) -> String {
+        serde_json::to_string(&self.engine.lock().unwrap().plan_continue(ok, &lang)).unwrap_or_default()
+    }
+
+    /// The app asked its own question for the step it was given (which contact, which app): the rest waits for the
+    /// answer, which the app reports with `plan_continue`, or drops with `plan_drop`.
+    pub fn plan_wait(&self) {
+        self.engine.lock().unwrap().plan_wait();
+    }
+
+    /// The app's question ended without an usable answer, or the user turned to something else: the waiting steps are
+    /// dropped. Returns how many.
+    pub fn plan_drop(&self) -> u32 {
+        self.engine.lock().unwrap().plan_drop() as u32
     }
 
     /// Where a sentence goes at AI-use `level` (1 sparing .. 4 AI first): "local", "talk" (the assistant answers in

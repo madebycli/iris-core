@@ -24,6 +24,14 @@ pub enum Card {
     Timer { entry: Entry },
 }
 
+/// A step of a plan only the app can carry out: its action id and the values the plan checked. The app runs it with
+/// the executor it has and reports back (`Engine::plan_continue`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostCall {
+    pub action: String,
+    pub args: serde_json::Map<String, serde_json::Value>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Reply {
     pub kind: ReplyKind,
@@ -34,11 +42,22 @@ pub struct Reply {
     /// Which skill answered, for logs and tests.
     pub skill: String,
     pub intent: String,
+    /// Set when a running plan has reached a step only the app can carry out. The app runs it and calls
+    /// `Engine::plan_continue` with the outcome; until then the rest of the plan waits in the core.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host: Option<HostCall>,
+    /// How many validated steps of a plan are still waiting or were not carried out.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub left: usize,
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
 impl Reply {
     pub fn new(kind: ReplyKind, text: impl Into<String>) -> Self {
-        Self { kind, text: text.into(), speech: None, card: None, skill: String::new(), intent: String::new() }
+        Self { kind, text: text.into(), speech: None, card: None, skill: String::new(), intent: String::new(), host: None, left: 0 }
     }
     pub fn done(text: impl Into<String>) -> Self {
         Self::new(ReplyKind::Done, text)

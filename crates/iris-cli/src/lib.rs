@@ -43,8 +43,8 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Default)]
 pub struct FakeState {
-    /// Actions only the app can carry out (`Host::act`), in order, with their checked arguments.
-    pub acted: Vec<(String, serde_json::Value)>,
+    /// The calendar cannot be written.
+    pub calendar_down: bool,
     pub now_ms: i64,
     pub zone: String,
     pub settings: HashMap<String, String>,
@@ -87,10 +87,6 @@ impl Host for FakeHost {
     }
     fn setting(&self, key: &str) -> Option<String> {
         self.0.lock().unwrap().settings.get(key).cloned()
-    }
-    fn act(&self, action: &str, args: &serde_json::Value) -> Result<String, HostError> {
-        self.0.lock().unwrap().acted.push((action.to_string(), args.clone()));
-        Ok(format!("done: {action}"))
     }
     fn schedule(&self, entry: &Entry) -> Result<(), HostError> {
         self.0.lock().unwrap().scheduled.push(entry.id.clone());
@@ -180,6 +176,9 @@ impl Host for FakeHost {
         Ok(list)
     }
     fn create_event(&self, event: &ExternalEvent) -> Result<String, HostError> {
+        if self.0.lock().unwrap().calendar_down {
+            return Err(HostError::Unavailable);
+        }
         self.0.lock().unwrap().events.push(event.clone());
         Ok("Calendar".into())
     }

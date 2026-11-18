@@ -54,6 +54,16 @@ impl Skill for Device {
                 change_device(cx, DeviceAction::SoundMode { mode }, "sound_mode")
             }
             "device.dnd" => change_device(cx, DeviceAction::DoNotDisturb { on: args.flag("on")? }, "dnd"),
+            "search.web" => {
+                let query = args.text("query")?.to_string();
+                match cx.host.device(&DeviceAction::WebSearch { query: query.clone() }) {
+                    Ok(_) => Reply::done(cx.msg("searched", &[("query", &query)])),
+                    Err(_) => Reply::failed(cx.msg("no_browser", &[])),
+                }
+            }
+            "music.playing" => playing(cx),
+            "notification.read" => read_from(cx, args.text("from").unwrap_or_default()),
+            "notification.reply" => start_reply_to(cx, args.text("from").unwrap_or_default(), args.text("message")?),
             _ => return None,
         })
     }
@@ -93,12 +103,7 @@ impl Skill for Device {
                 })
             }
             "send_message" => Some(Reply::failed(cx.msg("cannot_send", &[]))),
-            "playing" => Some(match cx.host.now_playing() {
-                Ok(Some(p)) if p.artist.is_empty() => Reply::done(cx.msg("playing", &[("title", &p.title)])),
-                Ok(Some(p)) => Reply::done(cx.msg("playing_by", &[("title", &p.title), ("artist", &p.artist)])),
-                Ok(None) => Reply::failed(cx.msg("playing_untitled", &[])),
-                Err(_) => Reply::failed(cx.msg("no_player", &[])),
-            }),
+            "playing" => Some(playing(cx)),
             "notifications" => Some(read_notifications(cx)),
             "reply" => Some(start_reply(cx)),
             "reply.pick" => Some(pick(cx)),
@@ -180,8 +185,22 @@ fn notices(cx: &Cx, from: &str) -> Result<Vec<Notice>, Box<Reply>> {
     cx.host.notifications(from).map_err(|_| Box::new(Reply::failed(cx.msg("allow_notifications", &[]))))
 }
 
+fn playing(cx: &mut Cx) -> Reply {
+    match cx.host.now_playing() {
+        Ok(Some(p)) if p.artist.is_empty() => Reply::done(cx.msg("playing", &[("title", &p.title)])),
+        Ok(Some(p)) => Reply::done(cx.msg("playing_by", &[("title", &p.title), ("artist", &p.artist)])),
+        Ok(None) => Reply::failed(cx.msg("playing_untitled", &[])),
+        Err(_) => Reply::failed(cx.msg("no_player", &[])),
+    }
+}
+
 fn read_notifications(cx: &mut Cx) -> Reply {
-    let list = match notices(cx, &from(cx)) {
+    let from = from(cx);
+    read_from(cx, &from)
+}
+
+fn read_from(cx: &mut Cx, from: &str) -> Reply {
+    let list = match notices(cx, from) {
         Ok(list) => list,
         Err(reply) => return *reply,
     };
@@ -195,6 +214,14 @@ fn read_notifications(cx: &mut Cx) -> Reply {
 fn start_reply(cx: &mut Cx) -> Reply {
     let app = from(cx);
     let message = raw_tail(cx, "message").unwrap_or_else(|| cx.slots.get("message").map(|r| cx.utt.orig_where(r, |_| true)).unwrap_or_default());
+    start_reply_to(cx, &app, &message)
+}
+
+/// Answers a notification (of the app or conversation named `app`, or any): asks which when several fit and always asks
+/// for a yes before anything is sent.
+fn start_reply_to(cx: &mut Cx, app: &str, message: &str) -> Reply {
+    let message = message.to_string();
+    let app = app.to_string();
     let candidates: Vec<Notice> = match notices(cx, &app) {
         Ok(list) => list.into_iter().filter(|n| n.can_reply).take(20).collect(),
         Err(reply) => return *reply,
@@ -242,7 +269,10 @@ fn confirm(cx: &mut Cx) -> Option<Reply> {
     let key = cx.state["key"].as_str().unwrap_or_default().to_string();
     let message = cx.state["message"].as_str().unwrap_or_default().to_string();
     Some(match cx.host.reply_to(&key, &message) {
-        Ok(()) => Reply::done(cx.msg("replied", &[])),
+        Ok(()) => {
+            cx.proceed();
+            Reply::done(cx.msg("replied", &[]))
+        }
         Err(HostError::Unavailable) => Reply::failed(cx.msg("reply_gone", &[])),
         Err(_) => Reply::failed(cx.msg("reply_failed", &[])),
     })

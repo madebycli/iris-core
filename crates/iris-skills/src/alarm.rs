@@ -32,8 +32,21 @@ impl Skill for Alarm {
                     Some(ms) => jiff::Timestamp::from_millisecond(ms).ok()?,
                     None => next_time(&cx.now, hour, minute)?,
                 };
-                let request = AlarmRequest { at_ms: at.as_millisecond(), hour, minute, days: Vec::new() };
-                let when = describe(at, &cx.now, cx.lang, false);
+                let z = at.to_zoned(cx.now.time_zone().clone());
+                let days: Vec<u8> = match args.text("repeat") {
+                    Some("daily") => (1..=7).collect(),
+                    Some("weekdays") => (1..=5).collect(),
+                    Some("weekly") => vec![z.weekday().to_monday_one_offset() as u8],
+                    _ => Vec::new(),
+                };
+                let request = AlarmRequest { at_ms: at.as_millisecond(), hour, minute, days: days.clone() };
+                let when = if days.is_empty() {
+                    describe(at, &cx.now, cx.lang, false)
+                } else {
+                    let time = cx.lang.format.clock.replace("{h}", &hour.to_string()).replace("{mm}", &format!("{minute:02}"));
+                    let repeat = cx.msg(match args.text("repeat") { Some("daily") => "repeat.daily", Some("weekdays") => "repeat.weekdays", _ => "repeat.weekly" }, &[]);
+                    cx.msg("repeating_when", &[("repeat", &repeat), ("time", &time)])
+                };
                 send(cx, &request, &when)
             }
             "alarm.next" => next(cx),
@@ -62,8 +75,14 @@ impl Skill for Alarm {
                 let hour = cx.state["hour"].as_u64().map(|h| h as u8);
                 let minute = cx.state["minute"].as_u64().map(|m| m as u8).or(hour.map(|_| 0));
                 Some(match cx.host.device(&iris_core::DeviceAction::DismissAlarm { hour, minute }) {
-                    Ok(_) if hour.is_some() => Reply::done(cx.msg("dismissed_at", &[])),
-                    Ok(_) => Reply::done(cx.msg("dismissed", &[])),
+                    Ok(_) if hour.is_some() => {
+                        cx.proceed();
+                        Reply::done(cx.msg("dismissed_at", &[]))
+                    }
+                    Ok(_) => {
+                        cx.proceed();
+                        Reply::done(cx.msg("dismissed", &[]))
+                    }
                     Err(_) => Reply::failed(cx.msg("no_clock", &[])),
                 })
             }
