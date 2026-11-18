@@ -106,6 +106,19 @@ impl Rejection {
     pub const ZONE: &'static str = "zone";
 }
 
+/// The skill and the intents that carry out an action of `kind` (see `Engine::process_planned`). A list entry is the
+/// intent "put" in a language whose sentence names the list first and "add" in one that does not.
+pub fn target(kind: &str) -> Option<(&'static str, &'static [&'static str])> {
+    match kind {
+        "reminder.create" => Some(("reminder", &["create"])),
+        "alarm.set" => Some(("alarm", &["set"])),
+        "timer.set" => Some(("timer", &["set"])),
+        "list.add" => Some(("lists", &["put", "add"])),
+        "note.add" => Some(("notes", &["add"])),
+        _ => None,
+    }
+}
+
 fn rejected(reason: &str) -> Outcome {
     Outcome::Rejected { reason: reason.to_string() }
 }

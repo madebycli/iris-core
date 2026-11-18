@@ -316,6 +316,15 @@ impl IrisCore {
         serde_json::to_string(&reply).unwrap_or_default()
     }
 
+    /// Carries out one action of an accepted plan (`kind` and `sentence` as `plan_validate` returned them) with the
+    /// skill that action belongs to and nothing else (see `Engine::process_planned`). Same reply JSON as `process`;
+    /// `unhandled` means nothing was done.
+    pub fn process_planned(&self, kind: String, sentence: String, lang: String) -> String {
+        let planned = iris_core::plan::Planned { kind, sentence };
+        let reply = self.engine.lock().unwrap().process_planned(&planned, &lang);
+        serde_json::to_string(&reply).unwrap_or_default()
+    }
+
     /// Where a sentence goes at AI-use `level` (1 sparing .. 4 AI first): "local", "talk" (the assistant answers in
     /// text) or "plan" (the assistant proposes actions, see `plan_prompt` and `plan_validate`). An answer to an
     /// open question of the core is always "local".

@@ -189,6 +189,30 @@ impl Engine {
         reply
     }
 
+    /// Carries out one validated plan action (`plan::Planned`) with the skill and intent it names, and nothing else:
+    /// no undo, repeat or cancel word, no split into two requests, no classifier, no other skill. When the skill's own
+    /// pattern does not take the sentence, or a question of the core is still open, nothing happens and the reply is
+    /// `Unhandled`. The values were checked by the plan; the sentence only carries them into the skill's grammar.
+    pub fn process_planned(&mut self, planned: &crate::plan::Planned, code: &str) -> Reply {
+        let unhandled = |this: &Self| {
+            let text = this.langs.get(code).or_else(|| this.langs.get("en")).map(|l| l.messages.get("not_understood", &[])).unwrap_or_default();
+            let mut r = Reply::new(ReplyKind::Unhandled, text);
+            r.skill = "core".into();
+            r
+        };
+        let Some((skill, intents)) = crate::plan::target(&planned.kind) else { return unhandled(self) };
+        let Some(lang) = self.langs.get(code).or_else(|| self.langs.get("en")).cloned() else { return unhandled(self) };
+        if self.pending.is_some() {
+            return unhandled(self);
+        }
+        let utt = Utterance::new(&planned.sentence, &lang);
+        let found = self.grammar(&utt, &lang).into_iter().find(|(i, n, _)| intents.contains(&n.as_str()) && self.skills[*i].manifest.id == skill);
+        let Some((index, intent, slots)) = found else { return unhandled(self) };
+        let Some(reply) = self.run(index, &intent, &utt, slots, &lang, serde_json::Value::Null) else { return unhandled(self) };
+        self.remember_turn(&planned.sentence, code, &reply);
+        reply
+    }
+
     fn remember_turn(&mut self, text: &str, code: &str, reply: &Reply) {
         if reply.kind == ReplyKind::Unhandled || reply.skill == "core" {
             return;
