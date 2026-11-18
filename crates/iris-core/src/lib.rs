@@ -11,6 +11,7 @@ pub mod engine;
 pub mod entry;
 pub mod host;
 pub mod lang;
+pub mod plan;
 pub mod reply;
 pub mod skill;
 pub mod store;

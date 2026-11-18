@@ -36,6 +36,53 @@ A future home client supplies its own clock, capabilities, provider transport an
 can reuse the same Core policy and proposal validation. Introducing a capability requires a typed
 contract, a validator, an executor and tests for unavailable and rejected operations.
 
+### The contract, version 1 (`iris-core::plan`)
+
+**Levels.** `plan::route(level, text, lang, open_question)` returns `local`, `talk` or `plan`. Level 1 (sparing) decides
+nothing here; the older routing (an unplaced sentence, knowledge questions, follow-ups) applies. Level 2 (balanced) hands
+over questions about earlier turns ("warum", "wann wollte ich") as `talk` and long or several-task sentences as `plan`;
+level 3 (smart) also every sentence of nine words or more that is not a simple command; level 4 (AI first) everything
+except simple commands. A request put as a question ("kannst du eine Erinnerung erstellen?") is a command, so it is
+`plan`, not `talk`. An answer to an open question, a simple command ("Timer auf 5 Minuten", "Wie spät ist es") and a
+sentence of two words or fewer are always `local`. The words are data in `core/lang/plan/<code>.toml`.
+
+**The prompt.** `plan::prompt(lang, now_ms, zone)` gives the assistant the contract and the turn's clock (weekday,
+date, time, zone). Only the current sentence and this text leave the phone: no entries, contacts, calendar or memory.
+
+**The reply.** One JSON object, in one of three forms:
+
+```json
+{"version":1,"actions":[ {"type":"reminder.create","title":"Schuhhaus Müller","date":"2026-11-19","time":"16:00"},
+                         {"type":"alarm.set","time":"15:40","date":"2026-11-19"} ]}
+{"version":1,"ask":{"slot":"time"}}
+{"version":1,"not_action":true}
+```
+
+Actions: `reminder.create {title,date,time}`, `alarm.set {time,date?}`, `timer.set {seconds,label?}`,
+`list.add {list,item}`, `note.add {text}`. `date` is `YYYY-MM-DD`, `time` is `HH:MM`; a duration only ever appears as
+`timer.set.seconds`.
+
+**Validation (`plan::validate`).** Everything or nothing: one bad action rejects the whole proposal, and nothing is
+carried out before it is accepted. Rejected: another `version`, an unknown action type or unknown field, more than
+5 actions, a time or date that is not exactly `HH:MM` / `YYYY-MM-DD`, a date in the past or more than a year ahead, a
+reminder or dated alarm whose moment has passed (against the turn's clock in the host's zone), a timer outside 1 s to
+24 h, and text that is empty, longer than 80 characters (note: 200), or holds control characters, sentence punctuation
+or brackets, so that a title cannot smuggle a second command into a sentence. An `ask` takes one of the slots `time`,
+`date`, `duration`, `title`, `list`; its question is the core's own sentence, not the assistant's text, and it never
+comes with actions. `not_action` goes back to the assistant as a text question.
+
+**Execution.** Each valid action becomes a sentence in the engine's own grammar ("Erinnere mich morgen um 16:00 Uhr an
+Schuhhaus Müller"), in the user's language. The host says the sentences to `process` one after the other, so the
+existing skills create the entries and report their own outcomes (an alarm handed to the clock app is acknowledged as
+handed over, not as set). If a sentence opens a question, the host stops and lists the rest as still open. The host
+never resends the assistant's request after an uncertain outcome.
+
+**Dismissing a question.** `Engine::cancel_question` drops the open question and nothing else: running timers and
+existing entries stay, and nothing is created from the half-finished request.
+
+**Adding a capability** needs a typed action, a validator branch, a sentence template per language, an integration test
+against the real engine (`crates/iris-cli/tests/plan.rs`) and tests for rejected and unavailable operations.
+
 ## Tidying up entries (`iris-cloud::organize`)
 
 After the core created a reminder, task, note or list item, the AI may propose a clean title ("ich muss noch um

@@ -1,0 +1,63 @@
+# German words of the action planner: who handles a sentence (the AI-use levels), the sentences the core
+# says to itself for a validated action, the questions it asks, and what the assistant AI is told.
+code = "de"
+
+[routing]
+# a question about what was said or done before
+reference = '(?iu)\b(warum|wieso|weshalb|weswegen|wann wollte ich|was (?:habe|hab) ich (?:gesagt|gemeint|gewollt)|was meinst du|wie kommt es|erkl[äa]r\w*)\b'
+# several tasks in one sentence
+sequence = '(?iu)\b(und danach|und dann|danach|dann noch|au[ßs]erdem|und au[ßs]erdem|als n[äa]chstes|und noch)\b'
+# a request, also when it is put as a question ("kannst du eine Erinnerung erstellen?")
+command = '(?iu)\b(erstell\w*|erinner\w*|stell\w*|l[öo]sch\w*|f[üu]g\w*|trag\w*|schreib\w*|speicher\w*|ruf\w*|[öo]ffne\w*|setz\w*|[äa]nder\w*|verschieb\w*|wecker|timer|erinnerung|notiz|liste|termin|aufgabe)\b'
+question = '(?iu)^\s*(wer|was|wann|wo|wie|warum|wieso|weshalb|welche[rsmn]?|wozu)\b|\?\s*$'
+# clear, short commands the local brain does well
+simple = [
+  '(?iu)^\W*(?:stell\w*|start\w*|setz\w*|mach\w*)?\s*(?:mir\s+)?(?:einen\s+|den\s+)?timer\s+(?:auf|f[üu]r)\s+\d+\s*\w*\W*$',
+  '(?iu)\b(wie sp[äa]t|wie viel uhr|welcher tag|welches datum)\b',
+  '(?iu)\b(lauter|leiser|lautst[äa]rke|heller|dunkler|taschenlampe|licht (?:an|aus)|nicht st[öo]ren)\b',
+  '(?iu)^\W*(?:stopp?|abbrechen|r[üu]ckg[äa]ngig|ja|nein|danke|hallo|hi)\W*$',
+  '(?iu)^\W*zeig\w*\b.{0,30}\b(?:erinnerungen|timer|wecker|listen|notizen)\W*$',
+]
+
+[format]
+date = "%d.%m.%Y"
+weekdays = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+
+[render]
+# the sentence the core says to itself; the engine's own grammar understands it
+reminder = "Erinnere mich {when} an {title}"
+when_today = "um {time} Uhr"
+when_tomorrow = "morgen um {time} Uhr"
+when_date = "am {date} um {time} Uhr"
+alarm = "Stelle einen Wecker auf {time} Uhr{when}"
+alarm_today = ""
+alarm_tomorrow = " morgen"
+alarm_date = " am {date}"
+timer = "Stelle einen Timer{label} auf {amount}"
+timer_label = " für {label}"
+seconds = "{n} Sekunden"
+minutes = "{n} Minuten"
+hours = "{n} Stunden"
+list = "Setze {item} auf die Liste {list}"
+note = "Notiere {text}"
+
+[ask]
+time = "Um wie viel Uhr?"
+date = "Für welchen Tag?"
+duration = "Wie lange?"
+title = "Wie soll es heißen?"
+list = "Auf welche Liste?"
+
+[prompt]
+system = """Du planst Aktionen für den Sprachassistenten Iris. Heute ist {weekday}, der {today} (Zeitzone {zone}), es ist {time} Uhr.
+Antworte nur mit einem JSON-Objekt, ohne Text davor oder danach. Drei Formen:
+{"version":1,"actions":[ ... ]}   Aktionen, die ausgeführt werden
+{"version":1,"ask":{"slot":"time"}}   genau eine Rückfrage, dann keine Aktionen (slot: time, date, duration, title, list)
+{"version":1,"not_action":true}   die Nachricht ist keine Aufgabe für diese Aktionen
+Aktionen (alle Felder Pflicht, außer wo "optional" steht):
+{"type":"reminder.create","title":"Schuhhaus Müller","date":"2026-11-19","time":"16:00"}
+{"type":"alarm.set","time":"15:40","date":"2026-11-19"}   date optional
+{"type":"timer.set","seconds":600,"label":"Nudeln"}   label optional
+{"type":"list.add","list":"Einkauf","item":"Milch"}
+{"type":"note.add","text":"Milch kaufen"}
+Regeln: Höchstens 5 Aktionen. date ist JJJJ-MM-TT, time ist HH:MM in 24 Stunden. Rechne relative Angaben (morgen, übermorgen, in zwei Stunden) in feste Werte um. Uhrzeit, Datum und Dauer sind getrennte Werte: eine Dauer steht nur in timer.set seconds. Nennt der Nutzer eine Ankunftszeit und eine Weg- oder Vorlaufzeit, rechne die Weckzeit selbst aus. Titel sind kurze Hauptwort-Gruppen ohne Verb und ohne Satzzeichen, höchstens 80 Zeichen. Fehlt etwas Wichtiges, stelle die Rückfrage, statt zu raten. Ist die Nachricht eine Frage, ein Gespräch, eine Programmier- oder Schreibaufgabe oder eine Bitte an dich selbst, antworte mit not_action. Erfinde nichts."""

@@ -126,8 +126,21 @@ impl Engine {
         self.store.as_ref()
     }
 
+    /// The turn's clock: the host's time in milliseconds and its IANA time zone. One clock per turn, so a planner prompt
+    /// and the validation of its answer resolve "tomorrow" against the same instant.
+    pub fn turn_clock(&self) -> (i64, String) {
+        (self.host.now_ms(), self.host.zone())
+    }
+
     pub fn has_question(&self) -> bool {
         self.pending.is_some()
+    }
+
+    /// The user dismissed the question the core was waiting on (a button, a swipe, a cancel in the app): it is dropped.
+    /// Only the question goes. Entries that exist (timers, reminders, lists) stay as they are, and nothing is created
+    /// from the half-finished request. Returns whether a question was open.
+    pub fn cancel_question(&mut self) -> bool {
+        self.pending.take().is_some()
     }
 
     /// Adds a skill. Its manifest and every language file are checked now, so a broken skill never reaches a user.

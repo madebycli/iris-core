@@ -309,6 +309,40 @@ impl IrisCore {
         serde_json::to_string(&reply).unwrap_or_default()
     }
 
+    /// Where a sentence goes at AI-use `level` (1 sparing .. 4 AI first): "local", "talk" (the assistant answers in
+    /// text) or "plan" (the assistant proposes actions, see `plan_prompt` and `plan_validate`). An answer to an
+    /// open question of the core is always "local".
+    pub fn route(&self, level: u8, text: String, lang: String) -> String {
+        let open = self.engine.lock().unwrap().has_question();
+        match iris_core::plan::route(level, &text, &lang, open) {
+            iris_core::plan::Route::Local => "local",
+            iris_core::plan::Route::Talk => "talk",
+            iris_core::plan::Route::Plan => "plan",
+        }
+        .to_string()
+    }
+
+    /// What the assistant is told to plan actions: the contract and this turn's clock. `None` for a language the
+    /// planner has no words for.
+    pub fn plan_prompt(&self, lang: String) -> Option<String> {
+        let (now_ms, zone) = self.engine.lock().unwrap().turn_clock();
+        iris_core::plan::prompt(&lang, now_ms, &zone)
+    }
+
+    /// Checks the assistant's whole reply against the contract and this turn's clock. JSON: `{"kind":"actions",
+    /// "actions":[{"kind","sentence"}]}`, `{"kind":"ask","slot","question"}`, `{"kind":"not_action"}` or
+    /// `{"kind":"rejected","reason"}`. Nothing is carried out here: the host says each sentence to `process`.
+    pub fn plan_validate(&self, raw: String, lang: String) -> String {
+        let (now_ms, zone) = self.engine.lock().unwrap().turn_clock();
+        serde_json::to_string(&iris_core::plan::validate(&raw, &lang, now_ms, &zone)).unwrap_or_default()
+    }
+
+    /// The user dismissed the question the core waits on: it is dropped, and only it. Entries that exist stay.
+    /// Returns whether a question was open.
+    pub fn cancel_question(&self) -> bool {
+        self.engine.lock().unwrap().cancel_question()
+    }
+
     /// Whether a skill is waiting for an answer: the microphone should open again.
     pub fn awaits_answer(&self) -> bool {
         self.engine.lock().unwrap().has_question()
