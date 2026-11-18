@@ -65,6 +65,17 @@ memory. A follow-up ("nein, früher") is a question about earlier turns and goes
 planner asked is joined to the sentence that raised it. The research AI never enters the planner: it only delivers
 content.
 
+**Privacy: what the planner can be sent, and no setting changes it.** The planner gets the tools of the request, the turn's clock
+and the current sentence, nothing else: no stored entries (reminders, lists, notes, timers), contacts, calendar, notifications,
+memory, location or earlier turns, and never what a step returned (reading actions show their result on the phone only; the
+assistant is asked once per order). There is no setting that adds to this: the AI-use slider only says how early the assistant is
+asked. Inside the sentence the host replaces what the phone knows to be private by a neutral word before it leaves (Android:
+names of contacts, saved places, the values in the memory, phone numbers, e-mail addresses, account numbers: `Kontakt1`,
+`Ort1`, `Angabe1`, `Nummer1`, `Mail1`, `Konto1`) and puts the words back into the checked actions on the phone after the core
+validated them, so the order still works and the AI never learns who "Kontakt1" is (`PlannerPrivacy`; tests
+`theProviderGetsTheToolsTheClockAndTheMaskedSentenceOnly` and `whatAReadingStepReturnsNeverGoesBackToTheProvider`, which switch
+every optional sharing setting on and check everything the provider received).
+
 **One clock per turn.** The clock and the offered tools are fixed when the prompt is made (`plan_prompt` keeps them) and
 the reply is checked against the same instant and the same offer (`plan_validate`; after ten minutes, or if the phone's
 clock went backwards, the current time is used, the tools stay). A relative word turned into a fixed date is judged against
