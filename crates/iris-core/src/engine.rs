@@ -328,8 +328,13 @@ impl Engine {
     /// use needs to ask an assistant (see `plan::route`).
     pub fn direct(&self, text: &str, code: &str) -> bool {
         let Some(lang) = self.langs.get(code) else { return false };
+        // a plain command is short and the network is very sure of it; a long, vague sentence that the network happens to
+        // read as a command ("show me what entries I have") is the assistant's to place
+        if text.split_whitespace().count() > crate::actions::DIRECT_MAX_WORDS {
+            return false;
+        }
         let utt = Utterance::new(text, lang);
-        self.classifier.classify(&utt.raw, &lang.code).into_iter().next().is_some_and(|p| p.p >= self.cutoff && crate::actions::registry().is_direct(&p.label))
+        self.classifier.classify(&utt.raw, &lang.code).into_iter().next().is_some_and(|p| p.p >= self.cutoff.max(crate::actions::DIRECT_MIN_P) && crate::actions::registry().is_direct(&p.label))
     }
 
     /// Carries out one checked action of an accepted plan with the executor the registry names: a skill's `act` or

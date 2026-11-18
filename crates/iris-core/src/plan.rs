@@ -23,7 +23,7 @@ use std::sync::OnceLock;
 /// The version of the action contract. A proposal with another version is rejected.
 pub const CONTRACT_VERSION: u32 = 2;
 /// Most actions one proposal may hold.
-pub const MAX_ACTIONS: usize = 6;
+pub const MAX_ACTIONS: usize = 8;
 const MAX_REPLY_BYTES: usize = 8 * 1024;
 const SLOTS: [&str; 5] = ["time", "date", "duration", "title", "list"];
 
@@ -434,7 +434,7 @@ mod tests {
         assert_eq!(reason(r#"{"version":1,"actions":[{"type":"note.add","text":"x"}]}"#), Rejection::VERSION);
         assert_eq!(reason(r#"{"version":2,"actions":[]}"#), Rejection::EMPTY);
         assert_eq!(reason("kein json"), Rejection::MALFORMED);
-        let many = format!(r#"{{"version":2,"actions":[{}]}}"#, [r#"{"type":"note.add","text":"x"}"#; 7].join(","));
+        let many = format!(r#"{{"version":2,"actions":[{}]}}"#, [r#"{"type":"note.add","text":"x"}"#; 9].join(","));
         assert_eq!(reason(&many), Rejection::TOO_MANY);
     }
 

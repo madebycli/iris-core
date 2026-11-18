@@ -103,7 +103,7 @@ args = [{ name = "title", kind = "text", required = true, max = 80 }, { name = "
 [[action]]
 id = "list.add"
 exec = "skill:lists"
-args = [{ name = "list", kind = "text", required = true, max = 80 }, { name = "item", kind = "text", required = true, max = 80 }]
+args = [{ name = "list", kind = "text", required = true, max = 80 }, { name = "items", kind = "texts", required = true, max = 80, count = 20 }]
 
 [[action]]
 id = "list.show"
@@ -119,6 +119,16 @@ args = [{ name = "item", kind = "text", required = true, max = 80 }, { name = "l
 id = "list.remove"
 exec = "skill:lists"
 args = [{ name = "item", kind = "text", required = true, max = 80 }, { name = "list", kind = "text", max = 80 }]
+
+[[action]]
+id = "list.check_all"
+exec = "skill:lists"
+args = [{ name = "list", kind = "text", required = true, max = 80 }]
+
+[[action]]
+id = "list.check_common"
+exec = "skill:lists"
+args = [{ name = "list", kind = "text", required = true, max = 80 }, { name = "other", kind = "text", required = true, max = 80 }]
 
 [[action]]
 id = "note.add"

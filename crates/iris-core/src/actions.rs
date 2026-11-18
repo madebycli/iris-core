@@ -15,6 +15,10 @@ use serde::Deserialize;
 use serde_json::{json, Map, Value};
 use std::sync::OnceLock;
 
+/// A plain command that stays local at every level has at most this many words.
+pub const DIRECT_MAX_WORDS: usize = 7;
+/// ... and the local network is at least this sure of it.
+pub const DIRECT_MIN_P: f32 = 0.85;
 const SOURCE: &str = include_str!("../../../actions/actions.toml");
 const MAX_DAYS_AHEAD: i64 = 366;
 /// A moment must lie further ahead than this: the plan is checked against the turn's clock and carried out a few
@@ -61,6 +65,8 @@ pub enum Kind {
     Int,
     /// A decimal number within `min..=max`.
     Number,
+    /// A list of plain phrases (each as `Text`, at most `count` of them, at least one).
+    Texts,
     /// Arithmetic: digits, spaces and `+ - * / ^ ( ) . , %`, nothing else.
     Expression,
     Date,
@@ -81,6 +87,9 @@ pub struct ArgSpec {
     pub min: Option<i64>,
     #[serde(default)]
     pub values: Vec<String>,
+    /// `Texts`: how many phrases at most.
+    #[serde(default)]
+    pub count: Option<usize>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -136,6 +145,10 @@ impl Args<'_> {
     }
     pub fn int(&self, name: &str) -> Option<i64> {
         self.0.get(name)?.as_i64()
+    }
+    /// A list of phrases (`Texts`).
+    pub fn texts(&self, name: &str) -> Vec<String> {
+        self.0.get(name).and_then(Value::as_array).map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()).unwrap_or_default()
     }
     pub fn number(&self, name: &str) -> Option<f64> {
         self.0.get(name)?.as_f64()
@@ -257,6 +270,17 @@ fn check_value(spec: &ArgSpec, raw: &Value, now: &Zoned) -> Result<Value, Reject
                 return Err(Reject::Number);
             }
             Ok(json!(n))
+        }
+        Kind::Texts => {
+            let list = raw.as_array().ok_or(Reject::Malformed)?;
+            if list.is_empty() || list.len() > spec.count.unwrap_or(20) {
+                return Err(Reject::Malformed);
+            }
+            let mut out = Vec::with_capacity(list.len());
+            for item in list {
+                out.push(json!(clean(item.as_str().ok_or(Reject::Malformed)?, spec.max.unwrap_or(80) as usize).ok_or(Reject::Text)?));
+            }
+            Ok(Value::Array(out))
         }
         Kind::Expression => {
             let t = raw.as_str().ok_or(Reject::Malformed)?.trim();

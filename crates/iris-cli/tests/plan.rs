@@ -60,7 +60,7 @@ fn the_shoe_store_evening_creates_a_reminder_an_alarm_and_a_list_entry() {
     let replies = run(&mut s, json!([
         {"type":"reminder.create","title":"Schuhhaus Müller","date":"2026-11-19","time":"16:00"},
         {"type":"alarm.set","time":"15:40","date":"2026-11-19"},
-        {"type":"list.add","list":"Einkauf","item":"Schuhe"}]));
+        {"type":"list.add","list":"Einkauf","items":["Schuhe"]}]));
     replies.iter().for_each(done);
     let reminders = all(&s, EntryKind::Reminder);
     assert_eq!((reminders.len(), reminders[0].title.as_str(), reminders[0].due_at), (1, "Schuhhaus Müller", Some(ms("2026-11-19T16:00"))));
@@ -215,7 +215,7 @@ fn a_title_that_fits_two_reminders_changes_nothing() {
 fn list_entries_are_added_shown_ticked_off_and_removed() {
     for (lang, list, milk, bread) in [("de", "Einkauf", "Milch", "Brot"), ("en", "Shopping", "Milk", "Bread")] {
         let mut s = session(lang);
-        run(&mut s, json!([{"type":"list.add","list":list,"item":milk},{"type":"list.add","list":list,"item":bread}])).iter().for_each(done);
+        run(&mut s, json!([{"type":"list.add","list":list,"items":[milk,bread]}])).iter().for_each(done);
         assert_eq!(all(&s, EntryKind::ListItem).len(), 2, "{lang}");
         done(&one(&mut s, json!({"type":"list.show","list":list})));
         done(&one(&mut s, json!({"type":"list.check","item":milk})));
@@ -315,7 +315,7 @@ fn every_action_of_the_registry_has_an_executor_that_knows_it() {
         "timer.set": {"seconds":60}, "timer.cancel": {"all":true}, "timer.pause": {}, "timer.resume": {}, "timer.extend": {"seconds":60}, "timer.show": {},
         "alarm.set": {"time":"07:00"}, "alarm.next": {}, "alarm.show": {}, "alarm.dismiss": {},
         "reminder.create": {"title":"x","date":"2026-11-19","time":"16:00"}, "reminder.show": {}, "reminder.delete": {"title":"x"}, "reminder.move": {"title":"x","date":"2026-11-19","time":"16:00"},
-        "list.add": {"list":"a","item":"b"}, "list.show": {}, "list.check": {"item":"b"}, "list.remove": {"item":"b"},
+        "list.add": {"list":"a","items":["b"]}, "list.check_all": {"list":"a"}, "list.check_common": {"list":"a","other":"b"}, "list.show": {}, "list.check": {"item":"b"}, "list.remove": {"item":"b"},
         "note.add": {"text":"x"}, "note.show": {}, "note.remove": {"text":"x"},
         "device.volume": {"change":"up"}, "device.brightness": {"change":"up"}, "device.sound_mode": {"mode":"ring"}, "device.dnd": {"on":false},
         "task.create": {"title":"x"}, "calendar.event": {"title":"x","date":"2026-11-19","time":"16:00"}, "flashlight.set": {"on":false},
@@ -540,4 +540,30 @@ fn a_question_of_the_app_holds_the_rest_until_it_is_answered_or_dropped() {
     assert_eq!(s.engine.plan_drop(), 1);
     assert_eq!(s.engine.plan_continue(true, "de").text, "");
     assert!(all(&s, EntryKind::Note).is_empty());
+}
+
+#[test]
+fn many_entries_for_two_lists_are_two_actions_and_a_cross_list_tick_is_decided_on_the_phone() {
+    // "Döner, Waschmittel, Milch, Zucchini, Gurke, Paprika auf die Einkaufsliste und noch Schuhe auf die To-do-Liste"
+    let mut s = session("de");
+    run(&mut s, json!([
+        {"type":"list.add","list":"Einkauf","items":["Döner","Waschmittel","Milch","Zucchini","Gurke","Paprika"]},
+        {"type":"list.add","list":"Klamotten kaufen","items":["Schuhe"]}])).iter().for_each(done);
+    let items = all(&s, EntryKind::ListItem);
+    assert_eq!((items.iter().filter(|e| e.collection == "Einkauf").count(), items.iter().filter(|e| e.collection == "Klamotten kaufen").count()), (6, 1));
+    // "Hake alles, was auf der Einkaufsliste ist, von der Essliste ab": the assistant never sees either list
+    run(&mut s, json!([{"type":"list.add","list":"Essliste","items":["Döner","Pizza","Milch"]}])).iter().for_each(done);
+    let r = one(&mut s, json!({"type":"list.check_common","list":"Essliste","other":"Einkauf"}));
+    done(&r);
+    let meals: Vec<(String, bool)> = all(&s, EntryKind::ListItem).into_iter().filter(|e| e.collection == "Essliste").map(|e| (e.title, e.pending)).collect();
+    assert!(meals.contains(&("Döner".into(), false)) && meals.contains(&("Milch".into(), false)) && meals.contains(&("Pizza".into(), true)), "{meals:?}");
+    // nothing in common: it says so and changes nothing
+    done(&one(&mut s, json!({"type":"list.check_common","list":"Klamotten kaufen","other":"Einkauf"})));
+    assert!(all(&s, EntryKind::ListItem).iter().any(|e| e.title == "Schuhe" && e.pending));
+    done(&one(&mut s, json!({"type":"list.check_all","list":"Einkauf"})));
+    assert!(all(&s, EntryKind::ListItem).iter().filter(|e| e.collection == "Einkauf").all(|e| !e.pending));
+    // an empty list of entries, or one that is too long, is not a plan
+    let tools: Vec<String> = s.engine.available_actions().iter().map(|a| a.id.clone()).collect();
+    let empty = json!({"version": plan::CONTRACT_VERSION, "actions": [{"type":"list.add","list":"Einkauf","items":[]}]}).to_string();
+    assert!(matches!(plan::validate(&empty, "de", now(), Z, &tools), Outcome::Rejected { .. }));
 }

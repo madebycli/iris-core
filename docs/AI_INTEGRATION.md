@@ -47,7 +47,7 @@ sentences as `plan`; level 3 (smart) also every sentence of nine words or more t
 (AI first) everything except simple commands. A request put as a question ("kannst du eine Erinnerung erstellen?") is a
 command, so it is `plan`, not `talk`. **Reachability is not routing:** an answer to an open question, a simple command
 ("Timer auf 5 Minuten"), a sentence of two words or fewer and one plain command the local network is sure of
-(`Engine::direct`: its label is in `direct` in `core/actions/actions.toml`, e.g. `flashlight_on`) are `local` at every
+(`Engine::direct`: its label is in `direct` in `core/actions/actions.toml`, e.g. `flashlight_on`, at most 7 words and the network at least 85 % sure: a long, vague sentence that the network happens to read as a command goes to the assistant) are `local` at every
 level, and never cost a request. Inside a larger order ("Taschenlampe an und danach einen Timer") the same simple
 words do not make it local: it is `plan`, and the assistant proposes `flashlight.set` as one step. The words are data
 in `core/lang/plan/<code>.toml`.
@@ -95,7 +95,7 @@ the table below.
 
 **Validation (`plan::validate`, `Registry::check`).** Everything or nothing: one bad action rejects the whole proposal and
 nothing is carried out before it is accepted. Rejected: another `version`, an unknown action or field, an action that was
-not offered for this request or that the phone cannot carry out (`unsupported`), more than 6 actions, a missing or wrongly
+not offered for this request or that the phone cannot carry out (`unsupported`), more than 8 actions, a missing or wrongly
 typed argument, a number or enum value out of its range, a time or date that is not exactly `HH:MM` / `YYYY-MM-DD`, a date
 in the past or more than a year ahead, a moment (date plus time) that is not more than a minute ahead of the turn's clock
 in the host's zone, a duration outside its range, and text that is empty, too long, or holds control characters, sentence
@@ -158,8 +158,10 @@ Arguments marked `?` are optional.
 | `reminder.show` | – | reminder | – |  | `reminders_are_created_shown_moved_and_deleted` |
 | `reminder.delete` | title | reminder | schedule |  | `a_title_that_fits_two_reminders_changes_nothing` |
 | `reminder.move` | title, date, time | reminder | schedule |  | `reminders_are_created_shown_moved_and_deleted` |
-| `list.add` | list, item | lists | – |  | `list_entries_are_added_shown_ticked_off_and_removed` |
+| `list.add` | list, items (up to 20) | lists | – |  | `list_entries_are_added_shown_ticked_off_and_removed` |
 | `list.show` | list? | lists | – |  | `list_entries_are_added_shown_ticked_off_and_removed` |
+| `list.check_all` | list | lists | – |  | `many_entries_for_two_lists_are_two_actions_and_a_cross_list_tick_is_decided_on_the_phone` |
+| `list.check_common` | list, other | lists | – |  | same: ticks off on `list` what is also on `other`, decided on the phone, so the assistant never needs to see either list |
 | `list.check` | item, list? | lists | – |  | `list_entries_are_added_shown_ticked_off_and_removed` |
 | `list.remove` | item, list? | lists | – |  | `list_entries_are_added_shown_ticked_off_and_removed` |
 | `note.add` | text | notes | – |  | `notes_are_added_shown_and_removed` |
