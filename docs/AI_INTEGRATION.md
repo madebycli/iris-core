@@ -6,12 +6,35 @@ checks every proposal.
 
 ## What is worth a paid request (`iris-nlu`, `fallback::worth_cloud`, `fallback::conversation`)
 
-- Offline commands (timers, alarms, weather, devices, music, lists, reminders) never go to the AI.
+- Clear local commands take the local path. Complex instructions can use the action planner when allowed by the routing level and the online consent settings.
 - A knowledge question goes to the AI.
 - A sentence the network could not place and that is no real question is mostly noise from the speech
   recogniser: Iris asks back locally, which costs nothing.
 - Set phrases ("hi", "danke", "wie geht's") keep Iris's own answers; real conversation of four words or more
   ("ich fühle mich heute mies, weil ...") goes to the AI with the memory (setting "Conversations").
+
+## Action planning across the Core and Android
+
+The four routing levels express how readily Iris asks for interpretation. Android stores the choice
+and presents the slider. The Core owns the routing decision, the vocabulary of actions and the
+validation of the reply. Changing levels grants no additional device or network permission.
+
+1. Resolve the current dialog first. When the user dismisses an unfinished request, discard its
+   outstanding question. A dismissal of a timer setup must leave existing timers alone.
+2. For a direct local command, use the existing skill. For a planning turn, intersect the relevant
+   action families with the operations the host supports. Send the current utterance and the
+   selected argument contract through the assistant provider. Credentials, HTTP and web sessions
+   belong to the client. Research answers never enter the action dispatcher.
+3. Validate the entire proposal before any side effect. A clock time, a duration and a timestamp
+   are separate values. Resolve dates against a single turn clock and the host time zone.
+   A clarification is a dialog turn. It cannot also create an entry.
+4. Dispatch validated actions to the host and report their individual outcomes. An Android intent
+   that hands off to another app may acknowledge the handoff only. Avoid replaying an action when
+   its outcome is uncertain.
+
+A future home client supplies its own clock, capabilities, provider transport and executors. It
+can reuse the same Core policy and proposal validation. Introducing a capability requires a typed
+contract, a validator, an executor and tests for unavailable and rejected operations.
 
 ## Tidying up entries (`iris-cloud::organize`)
 
