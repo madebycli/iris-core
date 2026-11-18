@@ -49,8 +49,10 @@ sentence of two words or fewer are always `local`. The words are data in `core/l
 **The prompt.** `plan::prompt(lang, now_ms, zone, families)` gives the assistant the contract for the action families
 the host can carry out now (`Engine::plan_families`: reminders and timers need scheduling, alarms need the clock app,
 lists and notes live in the store) and the turn's clock (weekday, date, time, zone). The host sends this text and the
-current sentence. A host may add recent turns so that "nein, früher" can be resolved; Android adds the last two turns
-that are not personal (`SharedTurns`) and nothing else: no entries, contacts, calendar or memory. If the host can carry
+current sentence and nothing else: no earlier turns, entries, contacts, calendar or memory. A follow-up
+("nein, früher") is a question about earlier turns and is routed as `talk`, not planned. The host reports what it can
+do through `Phone::has_capability` (Android: the clock app answers the alarm intent, a task app is set up); a family it
+cannot carry out is left out of the prompt and rejected in a reply. If the host can carry
 out no action, or the language has no planner words, there is no prompt and the sentence stays local.
 
 **One clock per turn.** The clock is fixed when the prompt is made (`plan_prompt` keeps it) and the answer is checked
@@ -90,6 +92,11 @@ never resends the assistant's request after an uncertain outcome.
 
 **Dismissing a question.** `Engine::cancel_question` drops the open question and nothing else: running timers and
 existing entries stay, and nothing is created from the half-finished request.
+
+**Calendar and task apps.** A reminder reaches the user's task list or calendar through the reminder skill's own
+destination setting (`Capability::Tasks` / `Calendar`), so `reminder.create` already covers them; the contract has no
+separate calendar or task action. A calendar appointment with a duration needs its own typed action, which is not
+part of version 1.
 
 **Adding a capability** needs a typed action, a validator branch, a sentence template per language, an integration test
 against the real engine (`crates/iris-cli/tests/plan.rs`) and tests for rejected and unavailable operations.

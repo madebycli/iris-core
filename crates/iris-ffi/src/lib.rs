@@ -26,6 +26,10 @@ pub trait Phone: Send + Sync {
     fn schedule(&self, entry: String) -> bool;
     fn unschedule(&self, id: String);
 
+    /// Whether the phone can do what a capability stands for right now: `schedule`, `tasks`, `calendar`, `alarm`, `device`,
+    /// `notifications`, `http`, `location`. The planner leaves out the actions the phone cannot carry out.
+    fn has_capability(&self, name: String) -> bool;
+
     /// The lists of the user's task app as JSON `[{"id","name"}]`; `None` when there is no such app.
     fn task_lists(&self) -> Option<String>;
     /// Creates a task (JSON of an external task). Returns the name of the list it went to.
@@ -72,8 +76,9 @@ impl Host for Bridge {
     fn zone(&self) -> String {
         self.0.zone()
     }
-    fn has(&self, _capability: Capability) -> bool {
-        true
+    fn has(&self, capability: Capability) -> bool {
+        let name = serde_json::to_value(capability).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default();
+        self.0.has_capability(name)
     }
     fn setting(&self, key: &str) -> Option<String> {
         self.0.setting(key.to_string())
