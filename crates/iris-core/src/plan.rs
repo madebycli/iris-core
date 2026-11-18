@@ -26,6 +26,9 @@ pub const CONTRACT_VERSION: u32 = 2;
 pub const MAX_ACTIONS: usize = 8;
 const MAX_REPLY_BYTES: usize = 8 * 1024;
 const SLOTS: [&str; 5] = ["time", "date", "duration", "title", "list"];
+/// The slot of a question the assistant words itself ("which list do you mean?"): shown, never executed.
+const OTHER: &str = "other";
+const MAX_QUESTION: usize = 160;
 
 /// Where a sentence goes at a given level of AI use.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -286,6 +289,9 @@ struct Proposal {
 #[serde(deny_unknown_fields)]
 struct RawAsk {
     slot: String,
+    /// Only with the slot `other`: the question in the user's language.
+    #[serde(default)]
+    question: Option<String>,
 }
 
 /// Checks the whole proposal in `raw` (the assistant's reply, possibly wrapped in a code fence or a sentence)
@@ -311,6 +317,16 @@ pub fn validate(raw: &str, lang: &str, now_ms: i64, zone: &str, tools: &[String]
         return Outcome::NotAction;
     }
     if let Some(ask) = proposal.ask {
+        // a question the assistant words itself: plain text for the user to read, never a command
+        if ask.slot == OTHER {
+            return match ask.question.as_deref().map(str::trim) {
+                Some(q) if !q.is_empty() && q.chars().count() <= MAX_QUESTION && !q.chars().any(char::is_control) => Outcome::Ask { slot: ask.slot, question: q.to_string() },
+                _ => rejected(Rejection::SLOT),
+            };
+        }
+        if ask.question.is_some() {
+            return rejected(Rejection::SLOT);
+        }
         return match (SLOTS.contains(&ask.slot.as_str()), p.ask.get(&ask.slot)) {
             (true, Some(question)) => Outcome::Ask { slot: ask.slot, question: question.clone() },
             _ => rejected(Rejection::SLOT),
@@ -394,13 +410,13 @@ mod tests {
         let raw = r#"{"version":2,"actions":[
             {"type":"reminder.create","title":"Schuhhaus Müller","date":"2026-11-19","time":"16:00"},
             {"type":"alarm.set","time":"15:40","date":"2026-11-19"},
-            {"type":"list.add","list":"Einkauf","item":"Schuhe"}]}"#;
+            {"type":"list.add","list":"Einkauf","items":["Schuhe"]}]}"#;
         let got = planned(raw);
         assert_eq!(got.iter().map(|a| a.id.as_str()).collect::<Vec<_>>(), ["reminder.create", "alarm.set", "list.add"]);
         let at = |s: &str| s.parse::<Zoned>().unwrap().timestamp().as_millisecond();
         assert_eq!(got[0].args["at_ms"], json!(at("2026-11-19T16:00[Europe/Berlin]")));
         assert_eq!(got[1].args["at_ms"], json!(at("2026-11-19T15:40[Europe/Berlin]")));
-        assert_eq!(got[2].args["item"], json!("Schuhe"));
+        assert_eq!(got[2].args["items"], json!(["Schuhe"]));
     }
 
     #[test]
@@ -418,6 +434,22 @@ mod tests {
         let mixed = r#"{"version":2,"ask":{"slot":"time"},"actions":[{"type":"note.add","text":"x"}]}"#;
         assert_eq!(reason(mixed), Rejection::MIXED);
         assert_eq!(reason(r#"{"version":2,"ask":{"slot":"password"}}"#), Rejection::SLOT);
+    }
+
+    #[test]
+    fn a_question_the_assistant_words_itself_is_plain_text_and_never_comes_with_actions() {
+        match validate(r#"{"version":2,"ask":{"slot":"other","question":"Welche Liste meinst du: Einkauf oder Essen?"}}"#, "de", now(), Z, &every_tool()) {
+            Outcome::Ask { slot, question } => assert_eq!((slot.as_str(), question.as_str()), ("other", "Welche Liste meinst du: Einkauf oder Essen?")),
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(reason(r#"{"version":2,"ask":{"slot":"other"}}"#), Rejection::SLOT);
+        assert_eq!(reason(r#"{"version":2,"ask":{"slot":"other","question":""}}"#), Rejection::SLOT);
+        assert_eq!(reason(r#"{"version":2,"ask":{"slot":"time","question":"Wann?"}}"#), Rejection::SLOT);
+        let long = format!(r#"{{"version":2,"ask":{{"slot":"other","question":"{}"}}}}"#, "x".repeat(161));
+        assert_eq!(reason(&long), Rejection::SLOT);
+        assert_eq!(reason(r#"{"version":2,"ask":{"slot":"other","question":"a\u0007b"}}"#), Rejection::SLOT);
+        let mixed = r#"{"version":2,"ask":{"slot":"other","question":"Was?"},"actions":[{"type":"note.add","text":"x"}]}"#;
+        assert_eq!(reason(mixed), Rejection::MIXED);
     }
 
     #[test]

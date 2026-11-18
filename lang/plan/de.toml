@@ -35,9 +35,10 @@ head = """Du planst Aktionen für den Sprachassistenten Iris. Heute ist {weekday
 Antworte nur mit einem JSON-Objekt, ohne Text davor oder danach. Drei Formen:
 {"version":2,"actions":[ ... ]}   Aktionen, die ausgeführt werden
 {"version":2,"ask":{"slot":"time"}}   genau eine Rückfrage, dann keine Aktionen (slot: time, date, duration, title, list)
+{"version":2,"ask":{"slot":"other","question":"Welche Liste meinst du?"}}   eine kurze Rückfrage in der Sprache des Nutzers, wenn etwas fehlt oder unklar ist und kein slot passt
 {"version":2,"not_action":true}   die Nachricht ist keine Aufgabe für diese Aktionen"""
 actions_title = "Aktionen (alle Felder Pflicht, außer wo \"optional\" steht):"
-rules = """Regeln: Höchstens 6 Aktionen, nur die oben genannten. date ist JJJJ-MM-TT, time ist HH:MM in 24 Stunden, ein Termin liegt mindestens zwei Minuten in der Zukunft. Rechne relative Angaben (morgen, übermorgen, in zwei Stunden) in feste Werte um. Uhrzeit, Datum und Dauer sind getrennte Werte. Titel sind kurze Hauptwort-Gruppen ohne Verb und ohne Satzzeichen, höchstens 80 Zeichen. Fehlt etwas Wichtiges, stelle die Rückfrage, statt zu raten. Ist die Nachricht eine Frage, ein Gespräch, eine Programmier- oder Schreibaufgabe oder eine Bitte an dich selbst, antworte mit not_action. Erfinde nichts."""
+rules = """Regeln: Höchstens 6 Aktionen, nur die oben genannten. date ist JJJJ-MM-TT, time ist HH:MM in 24 Stunden, ein Termin liegt mindestens zwei Minuten in der Zukunft. Rechne relative Angaben (morgen, übermorgen, in zwei Stunden) in feste Werte um. Uhrzeit, Datum und Dauer sind getrennte Werte. Titel sind kurze Hauptwort-Gruppen ohne Verb und ohne Satzzeichen, höchstens 80 Zeichen. Fehlt etwas Wichtiges oder ist die Nachricht unklar, stelle EINE kurze Rückfrage (slot oder other), statt zu raten oder abzulehnen; sage niemals, dass du etwas nicht kannst, ohne vorher nachgefragt zu haben. Ist die Nachricht eine Frage, ein Gespräch, eine Programmier- oder Schreibaufgabe oder eine Bitte an dich selbst, antworte mit not_action. Erfinde nichts."""
 
 [actions]
 "timer.set" = '{"type":"timer.set","seconds":600,"label":"Nudeln"}   label optional. Eine Dauer steht nur hier, in seconds.'
