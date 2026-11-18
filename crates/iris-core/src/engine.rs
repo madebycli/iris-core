@@ -8,7 +8,7 @@
 //! A skill can decline at every step by returning `None`; the next candidate is then tried.
 
 use crate::entry::EntryKind;
-use crate::host::Host;
+use crate::host::{Host, HostError};
 use crate::lang::{LangPack, Messages};
 use crate::reply::{Reply, ReplyKind};
 use crate::skill::{Cx, Manifest, Pattern, Skill, SkillError, SkillLanguage, Slots};
@@ -132,13 +132,6 @@ impl Engine {
         (self.host.now_ms(), self.host.zone())
     }
 
-    /// The action families of the plan contract this host can carry out now: reminders and timers need scheduling,
-    /// alarms need the clock app, lists and notes live in the store.
-    pub fn plan_families(&self) -> crate::plan::Families {
-        let schedule = self.host.has(crate::host::Capability::Schedule);
-        crate::plan::Families { reminder: schedule, timer: schedule, alarm: self.host.has(crate::host::Capability::Alarm), list: true, note: true }
-    }
-
     pub fn has_question(&self) -> bool {
         self.pending.is_some()
     }
@@ -189,27 +182,55 @@ impl Engine {
         reply
     }
 
-    /// Carries out one validated plan action (`plan::Planned`) with the skill and intent it names, and nothing else:
-    /// no undo, repeat or cancel word, no split into two requests, no classifier, no other skill. When the skill's own
-    /// pattern does not take the sentence, or a question of the core is still open, nothing happens and the reply is
-    /// `Unhandled`. The values were checked by the plan; the sentence only carries them into the skill's grammar.
-    pub fn process_planned(&mut self, planned: &crate::plan::Planned, code: &str) -> Reply {
-        let unhandled = |this: &Self| {
-            let text = this.langs.get(code).or_else(|| this.langs.get("en")).map(|l| l.messages.get("not_understood", &[])).unwrap_or_default();
+    /// The actions of the plan contract the host can carry out now (`actions::registry`, intersected with `Host::has`).
+    pub fn available_actions(&self) -> Vec<&'static crate::actions::Action> {
+        crate::actions::registry().available(self.host.as_ref())
+    }
+
+    /// Whether the local network is sure `text` is one plain command it can carry out itself, so that no level of AI
+    /// use needs to ask an assistant (see `plan::route`).
+    pub fn direct(&self, text: &str, code: &str) -> bool {
+        let Some(lang) = self.langs.get(code) else { return false };
+        let utt = Utterance::new(text, lang);
+        self.classifier.classify(&utt.raw, &lang.code).into_iter().next().is_some_and(|p| p.p >= self.cutoff && crate::actions::registry().is_direct(&p.label))
+    }
+
+    /// Carries out one checked action of an accepted plan with the executor the registry names: a skill's `act` or
+    /// the host's `act`. Nothing is read again: the values are the ones the plan checked. While a question of the
+    /// core is open, nothing happens (`Unhandled`); the host asks again after the question is answered or dropped.
+    pub fn execute(&mut self, action: &str, args: &serde_json::Map<String, serde_json::Value>, code: &str) -> Reply {
+        let lang = self.langs.get(code).or_else(|| self.langs.get("en")).cloned();
+        let unhandled = |text: String| {
             let mut r = Reply::new(ReplyKind::Unhandled, text);
             r.skill = "core".into();
             r
         };
-        let Some((skill, intents)) = crate::plan::target(&planned.kind) else { return unhandled(self) };
-        let Some(lang) = self.langs.get(code).or_else(|| self.langs.get("en")).cloned() else { return unhandled(self) };
-        if self.pending.is_some() {
-            return unhandled(self);
+        let Some(lang) = lang else { return unhandled(String::new()) };
+        let nothing = || unhandled(lang.messages.get("not_understood", &[]));
+        let Some(def) = crate::actions::registry().get(action) else { return nothing() };
+        if self.pending.is_some() || !def.need.iter().all(|c| self.host.has(*c)) {
+            return nothing();
         }
-        let utt = Utterance::new(&planned.sentence, &lang);
-        let found = self.grammar(&utt, &lang).into_iter().find(|(i, n, _)| intents.contains(&n.as_str()) && self.skills[*i].manifest.id == skill);
-        let Some((index, intent, slots)) = found else { return unhandled(self) };
-        let Some(reply) = self.run(index, &intent, &utt, slots, &lang, serde_json::Value::Null) else { return unhandled(self) };
-        self.remember_turn(&planned.sentence, code, &reply);
+        let reply = match def.skill() {
+            Some(skill_id) => {
+                let Some(index) = self.skills.iter().position(|r| r.manifest.id == skill_id) else { return nothing() };
+                let empty = Utterance::new("", &lang);
+                self.run_with(index, action, &empty, Slots::default(), &lang, serde_json::Value::Null, |skill, cx| skill.act(action, &crate::actions::Args(args), cx))
+            }
+            None => {
+                let value = serde_json::Value::Object(args.clone());
+                let mut r = match self.host.act(action, &value) {
+                    Ok(text) => Reply::done(text),
+                    Err(HostError::Denied) => Reply::failed(lang.messages.get("action_denied", &[])),
+                    Err(_) => Reply::failed(lang.messages.get("action_unavailable", &[])),
+                };
+                r.skill = "host".into();
+                r.intent = action.to_string();
+                Some(r)
+            }
+        };
+        let Some(reply) = reply else { return nothing() };
+        self.remember_turn(action, code, &reply);
         reply
     }
 
@@ -408,6 +429,13 @@ impl Engine {
     }
 
     fn run(&mut self, index: usize, intent: &str, utt: &Utterance, slots: Slots, lang: &LangPack, state: serde_json::Value) -> Option<Reply> {
+        self.run_with(index, intent, utt, slots, lang, state, |skill, cx| skill.handle(intent, cx))
+    }
+
+    /// Runs `call` against skill `index` with the context of one turn: the store is recorded for "undo", a question the
+    /// skill asks is parked, and the reply is stamped with the skill and `intent`.
+    #[allow(clippy::too_many_arguments)]
+    fn run_with(&mut self, index: usize, intent: &str, utt: &Utterance, slots: Slots, lang: &LangPack, state: serde_json::Value, call: impl FnOnce(&dyn Skill, &mut Cx) -> Option<Reply>) -> Option<Reply> {
         let reg = &self.skills[index];
         let loaded = reg.langs.get(&lang.code)?;
         let now_ms = self.host.now_ms();
@@ -415,7 +443,7 @@ impl Engine {
         let now = Timestamp::from_millisecond(now_ms).unwrap_or(Timestamp::UNIX_EPOCH).to_zoned(tz);
         let recording = RecordingStore::new(self.store.as_ref());
         let mut cx = Cx { utt, slots, lang, messages: &loaded.messages, words: &loaded.words, expressions: &loaded.expressions, rewrites: &loaded.rewrites, tables: &loaded.tables, memory: &mut self.memory, skill_id: &reg.manifest.id, host: self.host.as_ref(), store: &recording, now, state, ask: None, ids: &mut self.ids, restore: Vec::new() };
-        let handled = reg.skill.handle(intent, &mut cx);
+        let handled = call(reg.skill.as_ref(), &mut cx);
         let asked = cx.ask.take();
         let restore = std::mem::take(&mut cx.restore);
         drop(cx);

@@ -15,25 +15,8 @@ simple = [
 ]
 
 [format]
-date = "%B %-d"
 weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
-[render]
-reminder = "Remind me {when} about {title}"
-when_today = "at {time}"
-when_tomorrow = "tomorrow at {time}"
-when_date = "on {date} at {time}"
-alarm = "Set an alarm for {time}{when}"
-alarm_today = ""
-alarm_tomorrow = " tomorrow"
-alarm_date = " on {date}"
-timer = "Set a timer{label} for {amount}"
-timer_label = " called {label}"
-seconds = "{n} seconds"
-minutes = "{n} minutes"
-hours = "{n} hours"
-list = "Add {item} to the {list} list"
-note = "Note {text}"
 
 [ask]
 time = "At what time?"
@@ -45,15 +28,50 @@ list = "Which list?"
 [prompt]
 head = """You plan actions for the voice assistant Iris. Today is {weekday}, {today} (time zone {zone}), it is {time}.
 Answer with one JSON object only, no text before or after it. Three forms:
-{"version":1,"actions":[ ... ]}   actions to carry out
-{"version":1,"ask":{"slot":"time"}}   exactly one question, then no actions (slot: time, date, duration, title, list)
-{"version":1,"not_action":true}   the message is no task for these actions"""
+{"version":2,"actions":[ ... ]}   actions to carry out
+{"version":2,"ask":{"slot":"time"}}   exactly one question, then no actions (slot: time, date, duration, title, list)
+{"version":2,"not_action":true}   the message is no task for these actions"""
 actions_title = "Actions (all fields required unless marked optional):"
-rules = """Rules: At most 5 actions, only those listed above. date is YYYY-MM-DD, time is HH:MM in 24 hours, a moment lies at least two minutes in the future. Turn relative words (tomorrow, the day after, in two hours) into fixed values. Clock time, date and duration are separate values. Titles are short noun phrases without a verb and without punctuation, at most 80 characters. If something important is missing, ask instead of guessing. If the message is a question, a chat, a programming or writing task or a request to you yourself, answer with not_action. Invent nothing."""
+rules = """Rules: At most 6 actions, only those listed above. date is YYYY-MM-DD, time is HH:MM in 24 hours, a moment lies at least two minutes in the future. Turn relative words (tomorrow, the day after, in two hours) into fixed values. Clock time, date and duration are separate values. Titles are short noun phrases without a verb and without punctuation, at most 80 characters. If something important is missing, ask instead of guessing. If the message is a question, a chat, a programming or writing task or a request to you yourself, answer with not_action. Invent nothing."""
 
-[prompt.actions]
-reminder = '{"type":"reminder.create","title":"Shoe store","date":"2026-11-19","time":"16:00"}'
-alarm = '{"type":"alarm.set","time":"15:40","date":"2026-11-19"}   date optional. If the user gives an arrival time and a travel or lead time, work out the alarm time yourself.'
-timer = '{"type":"timer.set","seconds":600,"label":"Pasta"}   label optional. A duration appears only here, in seconds.'
-list = '{"type":"list.add","list":"Shopping","item":"Milk"}'
-note = '{"type":"note.add","text":"Buy milk"}'
+[actions]
+"timer.set" = '{"type":"timer.set","seconds":600,"label":"Pasta"}   label optional. A duration appears only here, in seconds.'
+"timer.cancel" = '{"type":"timer.cancel","label":"Pasta"}   cancels a timer; label optional, "all":true for all. Only when asked.'
+"timer.pause" = '{"type":"timer.pause","label":"Pasta"}   label optional.'
+"timer.resume" = '{"type":"timer.resume","label":"Pasta"}   label optional.'
+"timer.extend" = '{"type":"timer.extend","seconds":120,"label":"Pasta"}   runs seconds longer; label optional.'
+"timer.show" = '{"type":"timer.show"}   shows how long running timers have left; label optional.'
+"alarm.set" = '{"type":"alarm.set","time":"15:40","date":"2026-11-19"}   date optional. If the user gives an arrival time and a travel or lead time, work out the wake-up time yourself.'
+"alarm.next" = '{"type":"alarm.next"}   says when the next alarm rings.'
+"alarm.show" = '{"type":"alarm.show"}   opens the alarm list of the clock app.'
+"alarm.dismiss" = '{"type":"alarm.dismiss","time":"07:00"}   time optional (else the next alarm). Iris asks first.'
+"reminder.create" = '{"type":"reminder.create","title":"Shoe store","date":"2026-11-19","time":"16:00"}'
+"reminder.show" = '{"type":"reminder.show"}   shows the open reminders.'
+"reminder.delete" = '{"type":"reminder.delete","title":"Dentist"}   title: the title of the existing reminder.'
+"reminder.move" = '{"type":"reminder.move","title":"Dentist","date":"2026-11-20","time":"09:00"}   moves an existing reminder.'
+"list.add" = '{"type":"list.add","list":"Shopping","item":"Milk"}   one entry per action.'
+"list.show" = '{"type":"list.show","list":"Shopping"}   list optional.'
+"list.check" = '{"type":"list.check","item":"Milk","list":"Shopping"}   ticks an entry off; list optional.'
+"list.remove" = '{"type":"list.remove","item":"Milk","list":"Shopping"}   deletes an entry; list optional.'
+"note.add" = '{"type":"note.add","text":"Buy milk"}'
+"note.show" = '{"type":"note.show"}   reads the notes out.'
+"note.remove" = '{"type":"note.remove","text":"milk"}   text: part of the existing note.'
+"device.volume" = '{"type":"device.volume","change":"set","percent":40,"ring":false}   change: up, down, set (then percent); ring true for the ringer, otherwise media.'
+"device.brightness" = '{"type":"device.brightness","change":"set","percent":60}   change: up, down, set (then percent), auto.'
+"device.sound_mode" = '{"type":"device.sound_mode","mode":"vibrate"}   mode: ring, vibrate, silent.'
+"device.dnd" = '{"type":"device.dnd","on":true}   do not disturb on or off.'
+"task.create" = '{"type":"task.create","title":"File taxes","date":"2026-11-30"}   task in the task app; date optional.'
+"calendar.event" = '{"type":"calendar.event","title":"Dentist","date":"2026-11-19","time":"15:00","minutes":60}   calendar appointment; minutes optional. Iris asks before saving it.'
+"flashlight.set" = '{"type":"flashlight.set","on":true}   flashlight on or off.'
+
+[tools]
+# which words of a request call for the tools of a family (several families may match: a mixed order gets all)
+timer = '(?iu)\b(timers?|stopwatch|countdown|cancel|pause|extend)\b'
+alarm = '(?iu)\b(alarm|wake|wake-?up|get up)\b'
+reminder = '(?iu)\b(remind\w*|do not forget|don.t forget|postpone|reschedule)\b'
+list = '(?iu)\b(lists?|shopping|grocery|groceries|tick|check off|cross off)\b'
+note = '(?iu)\b(notes?|write down|jot)\b'
+device = '(?iu)\b(louder|quieter|volume|brighter|dimmer|brightness|mute|vibrat\w*|silent|do not disturb|ringtone)\b'
+task = '(?iu)\b(tasks?|to-?do|todo)\b'
+calendar = '(?iu)\b(calendar|appointment|meeting|event)\b'
+flashlight = '(?iu)\b(flashlight|torch|light|lamp)\b'

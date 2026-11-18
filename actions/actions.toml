@@ -1,0 +1,180 @@
+# The actions the assistant AI may propose, language-neutral: id, who carries it out, what the host needs, and the
+# typed arguments. Words (what the AI is told, which request needs which tools) are data in lang/plan/<code>.toml.
+#
+#   id       "<family>.<verb>"; the family also selects the tools for a request (lang/plan/<code>.toml, [tools]).
+#   exec     "skill:<id>": that core skill's `act`; "host": the app's `Phone::act` (a device function outside the core).
+#   need     capabilities the host must have, or the action is neither offered nor accepted.
+#   args     name, kind (text, seconds, int, date, time, enum, bool), required; text: max; seconds and int: min, max;
+#            enum: values.
+#   moment   [date argument, time argument, date_optional]: the pair is one point in time on the turn's clock, which
+#            must lie more than a minute ahead; the core hands the executor its `at_ms`.
+#   confirm  the existing confirmation of the skill still applies (a question comes back instead of a result).
+
+# Labels of the local network for which it is authoritative at every level of AI use: one plain command with nothing
+# for an assistant to interpret. Inside a larger order the assistant may still propose the same action as a step.
+direct = ["flashlight_on", "flashlight_off", "music_pause", "music_next", "music_previous", "battery", "time", "date", "alarm_next", "alarm_list", "timer_query", "timer_cancel", "note_read", "list_read"]
+
+[[action]]
+id = "timer.set"
+exec = "skill:timer"
+need = ["schedule"]
+args = [{ name = "seconds", kind = "seconds", required = true, min = 1, max = 86400 }, { name = "label", kind = "text", max = 80 }]
+
+[[action]]
+id = "timer.cancel"
+exec = "skill:timer"
+need = ["schedule"]
+args = [{ name = "label", kind = "text", max = 80 }, { name = "all", kind = "bool" }]
+
+[[action]]
+id = "timer.pause"
+exec = "skill:timer"
+need = ["schedule"]
+args = [{ name = "label", kind = "text", max = 80 }]
+
+[[action]]
+id = "timer.resume"
+exec = "skill:timer"
+need = ["schedule"]
+args = [{ name = "label", kind = "text", max = 80 }]
+
+[[action]]
+id = "timer.extend"
+exec = "skill:timer"
+need = ["schedule"]
+args = [{ name = "seconds", kind = "seconds", required = true, min = 1, max = 86400 }, { name = "label", kind = "text", max = 80 }]
+
+[[action]]
+id = "timer.show"
+exec = "skill:timer"
+args = [{ name = "label", kind = "text", max = 80 }]
+
+[[action]]
+id = "alarm.set"
+exec = "skill:alarm"
+need = ["alarm"]
+moment = ["date", "time", true]
+args = [{ name = "time", kind = "time", required = true }, { name = "date", kind = "date" }]
+
+[[action]]
+id = "alarm.next"
+exec = "skill:alarm"
+need = ["alarm"]
+args = []
+
+[[action]]
+id = "alarm.show"
+exec = "skill:alarm"
+need = ["alarm"]
+args = []
+
+[[action]]
+id = "alarm.dismiss"
+exec = "skill:alarm"
+need = ["alarm"]
+confirm = true
+args = [{ name = "time", kind = "time" }]
+
+[[action]]
+id = "reminder.create"
+exec = "skill:reminder"
+need = ["schedule"]
+moment = ["date", "time", false]
+args = [{ name = "title", kind = "text", required = true, max = 80 }, { name = "date", kind = "date", required = true }, { name = "time", kind = "time", required = true }]
+
+[[action]]
+id = "reminder.show"
+exec = "skill:reminder"
+args = []
+
+[[action]]
+id = "reminder.delete"
+exec = "skill:reminder"
+need = ["schedule"]
+args = [{ name = "title", kind = "text", required = true, max = 80 }]
+
+[[action]]
+id = "reminder.move"
+exec = "skill:reminder"
+need = ["schedule"]
+moment = ["date", "time", false]
+args = [{ name = "title", kind = "text", required = true, max = 80 }, { name = "date", kind = "date", required = true }, { name = "time", kind = "time", required = true }]
+
+[[action]]
+id = "list.add"
+exec = "skill:lists"
+args = [{ name = "list", kind = "text", required = true, max = 80 }, { name = "item", kind = "text", required = true, max = 80 }]
+
+[[action]]
+id = "list.show"
+exec = "skill:lists"
+args = [{ name = "list", kind = "text", max = 80 }]
+
+[[action]]
+id = "list.check"
+exec = "skill:lists"
+args = [{ name = "item", kind = "text", required = true, max = 80 }, { name = "list", kind = "text", max = 80 }]
+
+[[action]]
+id = "list.remove"
+exec = "skill:lists"
+args = [{ name = "item", kind = "text", required = true, max = 80 }, { name = "list", kind = "text", max = 80 }]
+
+[[action]]
+id = "note.add"
+exec = "skill:notes"
+args = [{ name = "text", kind = "text", required = true, max = 200 }]
+
+[[action]]
+id = "note.show"
+exec = "skill:notes"
+args = []
+
+[[action]]
+id = "note.remove"
+exec = "skill:notes"
+args = [{ name = "text", kind = "text", required = true, max = 200 }]
+
+[[action]]
+id = "device.volume"
+exec = "skill:device"
+need = ["device"]
+args = [{ name = "change", kind = "enum", required = true, values = ["up", "down", "set"] }, { name = "percent", kind = "int", min = 0, max = 100 }, { name = "ring", kind = "bool" }]
+
+[[action]]
+id = "device.brightness"
+exec = "skill:device"
+need = ["device"]
+args = [{ name = "change", kind = "enum", required = true, values = ["up", "down", "set", "auto"] }, { name = "percent", kind = "int", min = 1, max = 100 }]
+
+[[action]]
+id = "device.sound_mode"
+exec = "skill:device"
+need = ["device"]
+args = [{ name = "mode", kind = "enum", required = true, values = ["ring", "vibrate", "silent"] }]
+
+[[action]]
+id = "device.dnd"
+exec = "skill:device"
+need = ["device"]
+args = [{ name = "on", kind = "bool", required = true }]
+
+[[action]]
+id = "task.create"
+exec = "skill:reminder"
+need = ["tasks"]
+args = [{ name = "title", kind = "text", required = true, max = 80 }, { name = "date", kind = "date" }]
+
+[[action]]
+id = "calendar.event"
+exec = "skill:reminder"
+need = ["calendar"]
+confirm = true
+moment = ["date", "time", false]
+args = [{ name = "title", kind = "text", required = true, max = 80 }, { name = "date", kind = "date", required = true }, { name = "time", kind = "time", required = true }, { name = "minutes", kind = "int", min = 5, max = 1440 }]
+
+[[action]]
+id = "flashlight.set"
+exec = "host"
+need = ["flashlight"]
+args = [{ name = "on", kind = "bool", required = true }]

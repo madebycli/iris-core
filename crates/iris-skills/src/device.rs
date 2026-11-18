@@ -22,6 +22,42 @@ impl Skill for Device {
         }
     }
 
+    fn act(&self, action: &str, args: &iris_core::actions::Args, cx: &mut Cx) -> Option<Reply> {
+        let change = |name: &str| match name {
+            "up" => Some(LevelChange::Up),
+            "down" => Some(LevelChange::Down),
+            "set" => Some(LevelChange::Set),
+            "auto" => Some(LevelChange::Auto),
+            _ => None,
+        };
+        let percent = args.int("percent").map(|p| p as u8);
+        Some(match action {
+            "device.volume" | "device.brightness" => {
+                let change = change(args.text("change")?)?;
+                // "set" needs the level: without it nothing is changed
+                if change == LevelChange::Set && percent.is_none() {
+                    return Some(Reply::failed(cx.lang.messages.get("action_unclear", &[])));
+                }
+                if action == "device.volume" {
+                    let ring = args.flag("ring").unwrap_or(false);
+                    change_device(cx, DeviceAction::Volume { ring, change, percent }, if ring { "ring_volume" } else { "media_volume" })
+                } else {
+                    change_device(cx, DeviceAction::Brightness { change, percent }, "brightness")
+                }
+            }
+            "device.sound_mode" => {
+                let mode = match args.text("mode")? {
+                    "silent" => SoundMode::Silent,
+                    "vibrate" => SoundMode::Vibrate,
+                    _ => SoundMode::Ring,
+                };
+                change_device(cx, DeviceAction::SoundMode { mode }, "sound_mode")
+            }
+            "device.dnd" => change_device(cx, DeviceAction::DoNotDisturb { on: args.flag("on")? }, "dnd"),
+            _ => return None,
+        })
+    }
+
     fn handle(&self, intent: &str, cx: &mut Cx) -> Option<Reply> {
         match intent {
             "volume" => {

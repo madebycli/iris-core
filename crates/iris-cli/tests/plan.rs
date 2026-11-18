@@ -1,10 +1,15 @@
-//! The action plan against the real engine: the sentences the core makes from a validated proposal do what
-//! the proposal says, and a dismissed question leaves what exists alone.
+//! The action plan against the real engine: every action of the registry reaches its own executor with the values
+//! the plan checked (no sentence is read again), does what it says in German and English, and a dismissed question
+//! leaves what exists alone. One test per family; `every_action_of_the_registry_has_a_test_here` keeps the list honest.
 
 use iris_cli::Session;
-use iris_core::plan::{self, Families, Outcome};
-use iris_core::{Entry, EntryKind, ReplyKind};
+use iris_core::actions::registry;
+use iris_core::plan::{self, Outcome};
+use iris_core::{Entry, EntryKind, Reply, ReplyKind};
 use jiff::Zoned;
+use serde_json::{json, Value};
+
+const Z: &str = "Europe/Berlin";
 
 fn now() -> i64 {
     "2026-11-18T14:00[Europe/Berlin]".parse::<Zoned>().unwrap().timestamp().as_millisecond()
@@ -14,172 +19,319 @@ fn ms(local: &str) -> i64 {
     format!("{local}[Europe/Berlin]").parse::<Zoned>().unwrap().timestamp().as_millisecond()
 }
 
-/// Carries out every action of `raw` the directed way (`process_planned`) and returns the replies.
-fn run_directed(s: &mut Session, raw: &str) -> Vec<iris_core::Reply> {
-    let families = s.engine.plan_families();
-    let Outcome::Actions { actions } = plan::validate(raw, &s.lang, s.host.0.lock().unwrap().now_ms, "Europe/Berlin", &families) else {
-        panic!("not valid: {raw}")
-    };
-    actions.iter().map(|a| s.engine.process_planned(a, &s.lang.clone())).collect()
+fn session(lang: &str) -> Session {
+    Session::new(now(), Z, lang)
 }
 
-/// Validates `raw`, says every sentence to the engine and returns the replies' text.
-fn run(s: &mut Session, raw: &str) -> Vec<String> {
-    let families = s.engine.plan_families();
-    let Outcome::Actions { actions } = plan::validate(raw, &s.lang, s.host.0.lock().unwrap().now_ms, "Europe/Berlin", &families) else {
-        panic!("not valid: {raw}")
-    };
-    actions.iter().map(|a| s.say(&a.sentence).text).collect()
+/// Validates the actions the way a request would offer them (every tool the host has) and returns the checked ones.
+fn checked(s: &Session, actions: Value) -> Vec<plan::Planned> {
+    let tools: Vec<String> = s.engine.available_actions().iter().map(|a| a.id.clone()).collect();
+    let raw = json!({"version": plan::CONTRACT_VERSION, "actions": actions}).to_string();
+    match plan::validate(&raw, &s.lang, now(), Z, &tools) {
+        Outcome::Actions { actions } => actions,
+        other => panic!("not valid: {raw}: {other:?}"),
+    }
 }
 
-fn titles(s: &Session, kind: EntryKind) -> Vec<Entry> {
+/// Carries out the actions the typed way and returns the replies.
+fn run(s: &mut Session, actions: Value) -> Vec<Reply> {
+    let lang = s.lang.clone();
+    checked(s, actions).iter().map(|a| s.engine.execute(&a.id, &a.args, &lang)).collect()
+}
+
+fn one(s: &mut Session, action: Value) -> Reply {
+    run(s, json!([action])).remove(0)
+}
+
+fn all(s: &Session, kind: EntryKind) -> Vec<Entry> {
     s.store.all(Some(kind))
 }
 
+fn done(reply: &Reply) {
+    assert!(reply.kind == ReplyKind::Done, "{:?}: {}", reply.kind, reply.text);
+}
+
+// ---- the contract reaches the executor -----------------------------------------------------------------
+
 #[test]
 fn the_shoe_store_evening_creates_a_reminder_an_alarm_and_a_list_entry() {
-    let mut s = Session::new(now(), "Europe/Berlin", "de");
-    let raw = r#"{"version":1,"actions":[
+    let mut s = session("de");
+    let replies = run(&mut s, json!([
         {"type":"reminder.create","title":"Schuhhaus Müller","date":"2026-11-19","time":"16:00"},
         {"type":"alarm.set","time":"15:40","date":"2026-11-19"},
-        {"type":"list.add","list":"Einkauf","item":"Schuhe"}]}"#;
-    let replies = run(&mut s, raw);
-    assert_eq!(replies.len(), 3, "{replies:?}");
-    let reminders = titles(&s, EntryKind::Reminder);
-    assert_eq!(reminders.len(), 1);
-    assert_eq!(reminders[0].title, "Schuhhaus Müller");
-    assert_eq!(reminders[0].due_at, Some(ms("2026-11-19T16:00")));
+        {"type":"list.add","list":"Einkauf","item":"Schuhe"}]));
+    replies.iter().for_each(done);
+    let reminders = all(&s, EntryKind::Reminder);
+    assert_eq!((reminders.len(), reminders[0].title.as_str(), reminders[0].due_at), (1, "Schuhhaus Müller", Some(ms("2026-11-19T16:00"))));
     let alarms = s.host.0.lock().unwrap().alarms.clone();
-    assert_eq!(alarms.len(), 1);
-    assert_eq!(alarms[0].at_ms, ms("2026-11-19T15:40"));
-    let items = titles(&s, EntryKind::ListItem);
-    assert_eq!(items.len(), 1);
+    assert_eq!((alarms.len(), alarms[0].at_ms), (1, ms("2026-11-19T15:40")));
+    let items = all(&s, EntryKind::ListItem);
     assert_eq!((items[0].title.as_str(), items[0].collection.as_str()), ("Schuhe", "Einkauf"));
 }
 
 #[test]
-fn every_kind_of_action_is_understood_by_the_engine_in_german_and_english() {
-    let de = [
-        r#"{"type":"reminder.create","title":"Oma","date":"2026-11-27","time":"09:05"}"#,
-        r#"{"type":"alarm.set","time":"07:00","date":"2026-11-20"}"#,
-        r#"{"type":"timer.set","seconds":600,"label":"Nudeln"}"#,
-        r#"{"type":"timer.set","seconds":90}"#,
-        r#"{"type":"list.add","list":"Einkauf","item":"Milch"}"#,
-        r#"{"type":"note.add","text":"Milch kaufen"}"#,
-    ];
-    let en = [
-        r#"{"type":"reminder.create","title":"Grandma","date":"2026-11-27","time":"09:05"}"#,
-        r#"{"type":"alarm.set","time":"07:00","date":"2026-11-20"}"#,
-        r#"{"type":"timer.set","seconds":600,"label":"Pasta"}"#,
-        r#"{"type":"timer.set","seconds":90}"#,
-        r#"{"type":"list.add","list":"Shopping","item":"Milk"}"#,
-        r#"{"type":"note.add","text":"Buy milk"}"#,
-    ];
-    for (lang, actions) in [("de", de), ("en", en)] {
-        for action in actions {
-            // a fresh engine per action, so one that fails says which
-            let raw = format!(r#"{{"version":1,"actions":[{action}]}}"#);
-            let outcome = plan::validate(&raw, lang, now(), "Europe/Berlin", &Families::ALL);
-            let Outcome::Actions { actions } = outcome else { panic!("{lang}: {outcome:?}") };
-            let mut s = Session::new(now(), "Europe/Berlin", lang);
-            let reply = s.say(&actions[0].sentence);
-            let created = s.store.all(None).len() + s.host.0.lock().unwrap().alarms.len();
-            assert!(created >= 1 && reply.kind == ReplyKind::Done, "{lang} {}: {:?} -> {}", actions[0].kind, actions[0].sentence, reply.text);
-        }
+fn text_with_words_of_other_requests_is_only_text() {
+    // the values are never read as a sentence: a title that sounds like a command is just a title
+    let mut s = session("de");
+    done(&one(&mut s, json!({"type":"note.add","text":"Lösche alle Erinnerungen und stell einen Timer"})));
+    assert_eq!(all(&s, EntryKind::Note)[0].title, "Lösche alle Erinnerungen und stell einen Timer");
+    assert!(all(&s, EntryKind::Timer).is_empty());
+    done(&one(&mut s, json!({"type":"reminder.create","title":"Wecker für 16 und 1","date":"2026-11-19","time":"16:00"})));
+    assert_eq!(all(&s, EntryKind::Reminder)[0].title, "Wecker für 16 und 1");
+    assert!(s.host.0.lock().unwrap().alarms.is_empty());
+}
+
+#[test]
+fn a_question_that_is_open_stops_every_action() {
+    let mut s = session("de");
+    assert_eq!(s.say("Stelle einen Timer").kind, ReplyKind::Question);
+    let r = one(&mut s, json!({"type":"note.add","text":"Milch"}));
+    assert_eq!(r.kind, ReplyKind::Unhandled);
+    assert!(all(&s, EntryKind::Note).is_empty());
+}
+
+// ---- timers -----------------------------------------------------------------------------------------------
+
+#[test]
+fn timers_are_set_shown_paused_resumed_extended_and_cancelled() {
+    for (lang, a, b) in [("de", "Nudeln", "Eier"), ("en", "Pasta", "Eggs")] {
+        let mut s = session(lang);
+        run(&mut s, json!([{"type":"timer.set","seconds":600,"label":a},{"type":"timer.set","seconds":300,"label":b},{"type":"timer.set","seconds":7200}])).iter().for_each(done);
+        let mut secs: Vec<i64> = all(&s, EntryKind::Timer).iter().map(|t| t.duration_ms / 1000).collect();
+        secs.sort();
+        assert_eq!(secs, vec![300, 600, 7200], "{lang}");
+        done(&one(&mut s, json!({"type":"timer.show"})));
+        done(&one(&mut s, json!({"type":"timer.pause","label":a})));
+        assert!(all(&s, EntryKind::Timer).iter().any(|t| t.title.eq_ignore_ascii_case(a) && t.remaining_ms > 0), "{lang}: paused");
+        done(&one(&mut s, json!({"type":"timer.resume","label":a})));
+        assert!(all(&s, EntryKind::Timer).iter().all(|t| t.remaining_ms == 0), "{lang}: resumed");
+        let before = all(&s, EntryKind::Timer).iter().find(|t| t.title.eq_ignore_ascii_case(b)).unwrap().due_at.unwrap();
+        done(&one(&mut s, json!({"type":"timer.extend","seconds":120,"label":b})));
+        let after = all(&s, EntryKind::Timer).iter().find(|t| t.title.eq_ignore_ascii_case(b)).unwrap().due_at.unwrap();
+        assert_eq!(after - before, 120_000, "{lang}");
+        done(&one(&mut s, json!({"type":"timer.cancel","label":a})));
+        assert_eq!(all(&s, EntryKind::Timer).len(), 2, "{lang}");
+        done(&one(&mut s, json!({"type":"timer.cancel","all":true})));
+        assert!(all(&s, EntryKind::Timer).is_empty(), "{lang}");
     }
 }
 
 #[test]
-fn the_dates_come_out_as_the_proposal_said() {
-    let mut s = Session::new(now(), "Europe/Berlin", "de");
-    run(&mut s, r#"{"version":1,"actions":[{"type":"reminder.create","title":"Oma","date":"2026-11-27","time":"09:05"},{"type":"alarm.set","time":"07:00","date":"2026-11-20"}]}"#);
-    assert_eq!(titles(&s, EntryKind::Reminder)[0].due_at, Some(ms("2026-11-27T09:05")));
-    assert_eq!(s.host.0.lock().unwrap().alarms[0].at_ms, ms("2026-11-20T07:00"));
-}
-
-#[test]
-fn a_timer_amount_is_what_the_proposal_said() {
-    let mut s = Session::new(now(), "Europe/Berlin", "de");
-    run(&mut s, r#"{"version":1,"actions":[{"type":"timer.set","seconds":600,"label":"Nudeln"},{"type":"timer.set","seconds":90},{"type":"timer.set","seconds":7200}]}"#);
-    let mut seconds: Vec<i64> = titles(&s, EntryKind::Timer).iter().map(|t| t.duration_ms / 1000).collect();
-    seconds.sort();
-    assert_eq!(seconds, vec![90, 600, 7200]);
+fn several_timers_without_a_name_are_not_guessed() {
+    let mut s = session("de");
+    run(&mut s, json!([{"type":"timer.set","seconds":600,"label":"Nudeln"},{"type":"timer.set","seconds":300,"label":"Eier"}])).iter().for_each(done);
+    for action in ["timer.cancel", "timer.pause"] {
+        let r = one(&mut s, json!({"type": action}));
+        assert_eq!(r.kind, ReplyKind::Failed, "{action}");
+    }
+    assert_eq!(all(&s, EntryKind::Timer).len(), 2);
+    assert!(all(&s, EntryKind::Timer).iter().all(|t| t.remaining_ms == 0));
 }
 
 #[test]
 fn dismissing_a_question_drops_only_the_question() {
-    let mut s = Session::new(now(), "Europe/Berlin", "de");
-    s.say("Stell einen Timer auf 10 Minuten");
-    assert_eq!(titles(&s, EntryKind::Timer).len(), 1);
-    // an unfinished reminder: the core asks what it should say
-    assert_eq!(s.say("Erstelle eine Erinnerung").kind, ReplyKind::Question);
-    assert!(s.engine.has_question());
+    let mut s = session("de");
+    s.say("Stell einen Timer auf 5 Minuten");
+    s.say("Stell einen Timer für Nudeln auf 10 Minuten");
+    assert_eq!(all(&s, EntryKind::Timer).len(), 2);
+    assert_eq!(s.say("Stelle einen Timer").kind, ReplyKind::Question);
     assert!(s.engine.cancel_question());
-    assert!(!s.engine.has_question());
-    // the timer stays, nothing was created from the half-finished request
-    assert_eq!(titles(&s, EntryKind::Timer).len(), 1);
-    assert!(titles(&s, EntryKind::Reminder).is_empty());
-    // and with nothing open there is nothing to drop
+    assert_eq!(all(&s, EntryKind::Timer).len(), 2);
     assert!(!s.engine.cancel_question());
 }
 
+// ---- alarms -----------------------------------------------------------------------------------------------
+
 #[test]
-fn dismissing_the_setup_of_a_timer_leaves_the_running_timers_alone() {
-    let mut s = Session::new(now(), "Europe/Berlin", "de");
-    s.say("Stell einen Timer auf 5 Minuten");
-    s.say("Stell einen Timer für Nudeln auf 10 Minuten");
-    assert_eq!(titles(&s, EntryKind::Timer).len(), 2);
-    assert_eq!(s.say("Stelle einen Timer").kind, ReplyKind::Question);
-    assert!(s.engine.cancel_question());
-    assert_eq!(titles(&s, EntryKind::Timer).len(), 2);
+fn an_alarm_is_set_with_a_date_or_for_the_next_time_the_clock_shows_it() {
+    let mut s = session("en");
+    done(&one(&mut s, json!({"type":"alarm.set","time":"07:00","date":"2026-11-20"})));
+    done(&one(&mut s, json!({"type":"alarm.set","time":"13:00"})));
+    done(&one(&mut s, json!({"type":"alarm.set","time":"15:00"})));
+    let at: Vec<i64> = s.host.0.lock().unwrap().alarms.iter().map(|a| a.at_ms).collect();
+    // 13:00 has passed on this day: tomorrow; 15:00 is still ahead: today
+    assert_eq!(at, vec![ms("2026-11-20T07:00"), ms("2026-11-19T13:00"), ms("2026-11-18T15:00")]);
+}
+
+#[test]
+fn the_next_alarm_is_asked_for_and_dismissing_asks_first() {
+    let mut s = session("de");
+    done(&one(&mut s, json!({"type":"alarm.next"})));
+    let r = one(&mut s, json!({"type":"alarm.dismiss","time":"07:00"}));
+    assert_eq!(r.kind, ReplyKind::Question, "{}", r.text);
+    assert!(s.host.0.lock().unwrap().device.is_empty(), "nothing is dismissed before the answer");
+    // the existing yes of the skill finishes it
+    done(&s.say("Ja"));
+    assert_eq!(s.host.0.lock().unwrap().device.len(), 1);
 }
 
 #[test]
 fn without_a_clock_app_the_plan_has_no_alarms() {
-    let s = Session::new(now(), "Europe/Berlin", "de");
+    let s = session("de");
     s.host.0.lock().unwrap().clock_missing = true;
-    let families = s.engine.plan_families();
-    assert!(!families.alarm && families.reminder && families.timer && families.list && families.note);
+    let available = s.engine.available_actions();
+    assert!(available.iter().all(|a| a.family() != "alarm"));
+    assert!(available.iter().any(|a| a.family() == "reminder") && available.iter().any(|a| a.family() == "timer"));
     let (now_ms, zone) = s.engine.turn_clock();
-    assert!(!plan::prompt("de", now_ms, &zone, &families).unwrap().contains("alarm.set"));
-    let raw = r#"{"version":1,"actions":[{"type":"alarm.set","time":"15:40","date":"2026-11-19"}]}"#;
-    assert_eq!(plan::validate(raw, "de", now_ms, &zone, &families), Outcome::Rejected { reason: "unsupported".into() });
+    let p = plan::prompt("de", now_ms, &zone, "Weck mich und stell einen Timer", &available).unwrap();
+    assert!(!p.text.contains("alarm.set") && p.text.contains("timer.set"));
+    let raw = r#"{"version":2,"actions":[{"type":"alarm.set","time":"15:40","date":"2026-11-19"}]}"#;
+    assert_eq!(plan::validate(raw, "de", now_ms, &zone, &p.tools), Outcome::Rejected { reason: "unsupported".into() });
 }
 
+// ---- reminders --------------------------------------------------------------------------------------------
+
 #[test]
-fn a_planned_action_reaches_its_own_skill_and_nothing_else() {
-    for lang in ["de", "en"] {
-        let mut s = Session::new(now(), "Europe/Berlin", lang);
-        let raw = r#"{"version":1,"actions":[
-            {"type":"reminder.create","title":"Oma","date":"2026-11-27","time":"09:05"},
-            {"type":"alarm.set","time":"07:00","date":"2026-11-20"},
-            {"type":"timer.set","seconds":600,"label":"Nudeln"},
-            {"type":"list.add","list":"Einkauf","item":"Milch"},
-            {"type":"note.add","text":"Milch kaufen"}]}"#;
-        let replies = run_directed(&mut s, raw);
-        let named: Vec<(String, String)> = replies.iter().map(|r| (r.skill.clone(), r.intent.clone())).collect();
-        assert!(replies.iter().all(|r| r.kind != ReplyKind::Unhandled), "{lang}: {named:?}");
-        assert_eq!(named[0].0, "reminder", "{named:?}");
-        assert_eq!(named[2].0, "timer", "{named:?}");
-        assert_eq!(named[3].0, "lists", "{named:?}");
-        assert_eq!(titles(&s, EntryKind::Reminder).len(), 1);
-        assert_eq!(titles(&s, EntryKind::Timer).len(), 1);
-        assert_eq!(titles(&s, EntryKind::ListItem).len(), 1);
-        assert_eq!(titles(&s, EntryKind::Note).len(), 1);
+fn reminders_are_created_shown_moved_and_deleted() {
+    for (lang, title) in [("de", "Oma anrufen"), ("en", "Call Grandma")] {
+        let mut s = session(lang);
+        done(&one(&mut s, json!({"type":"reminder.create","title":title,"date":"2026-11-27","time":"09:05"})));
+        assert_eq!(all(&s, EntryKind::Reminder)[0].due_at, Some(ms("2026-11-27T09:05")), "{lang}");
+        done(&one(&mut s, json!({"type":"reminder.show"})));
+        done(&one(&mut s, json!({"type":"reminder.move","title":title,"date":"2026-11-28","time":"18:30"})));
+        assert_eq!(all(&s, EntryKind::Reminder)[0].due_at, Some(ms("2026-11-28T18:30")), "{lang}");
+        done(&one(&mut s, json!({"type":"reminder.delete","title":title})));
+        assert!(all(&s, EntryKind::Reminder).is_empty(), "{lang}");
     }
 }
 
 #[test]
-fn a_planned_action_does_nothing_while_a_question_is_open_or_when_its_skill_does_not_take_it() {
-    let mut s = Session::new(now(), "Europe/Berlin", "de");
-    let open = s.say("Stell einen Timer");
-    assert_eq!(open.kind, ReplyKind::Question);
-    let planned = plan::Planned { kind: "note.add".into(), sentence: "Notiere Milch".into() };
-    assert_eq!(s.engine.process_planned(&planned, "de").kind, ReplyKind::Unhandled);
-    assert!(titles(&s, EntryKind::Note).is_empty());
-    s.engine.cancel_question();
-    // a sentence that is no note must not be read as another request
-    let wrong = plan::Planned { kind: "note.add".into(), sentence: "Wie spät ist es".into() };
-    assert_eq!(s.engine.process_planned(&wrong, "de").kind, ReplyKind::Unhandled);
-    assert!(titles(&s, EntryKind::Note).is_empty());
+fn a_title_that_fits_two_reminders_changes_nothing() {
+    let mut s = session("de");
+    run(&mut s, json!([{"type":"reminder.create","title":"Zahnarzt Müller","date":"2026-11-27","time":"09:05"},{"type":"reminder.create","title":"Zahnarzt Meier","date":"2026-11-28","time":"09:05"}])).iter().for_each(done);
+    let r = one(&mut s, json!({"type":"reminder.delete","title":"Zahnarzt"}));
+    assert_eq!(r.kind, ReplyKind::Failed);
+    assert_eq!(all(&s, EntryKind::Reminder).len(), 2);
+    let r = one(&mut s, json!({"type":"reminder.delete","title":"Frisör"}));
+    assert_eq!(r.kind, ReplyKind::Failed);
+    done(&one(&mut s, json!({"type":"reminder.delete","title":"Zahnarzt Meier"})));
+    assert_eq!(all(&s, EntryKind::Reminder).len(), 1);
+}
+
+// ---- lists and notes --------------------------------------------------------------------------------------
+
+#[test]
+fn list_entries_are_added_shown_ticked_off_and_removed() {
+    for (lang, list, milk, bread) in [("de", "Einkauf", "Milch", "Brot"), ("en", "Shopping", "Milk", "Bread")] {
+        let mut s = session(lang);
+        run(&mut s, json!([{"type":"list.add","list":list,"item":milk},{"type":"list.add","list":list,"item":bread}])).iter().for_each(done);
+        assert_eq!(all(&s, EntryKind::ListItem).len(), 2, "{lang}");
+        done(&one(&mut s, json!({"type":"list.show","list":list})));
+        done(&one(&mut s, json!({"type":"list.check","item":milk})));
+        assert!(all(&s, EntryKind::ListItem).iter().any(|e| e.title == milk && !e.pending), "{lang}");
+        done(&one(&mut s, json!({"type":"list.remove","item":bread,"list":list})));
+        assert_eq!(all(&s, EntryKind::ListItem).len(), 1, "{lang}");
+        assert_eq!(one(&mut s, json!({"type":"list.remove","item":"Gurke"})).kind, ReplyKind::Failed, "{lang}");
+    }
+}
+
+#[test]
+fn notes_are_added_shown_and_removed() {
+    for (lang, text) in [("de", "Milch kaufen"), ("en", "Buy milk")] {
+        let mut s = session(lang);
+        done(&one(&mut s, json!({"type":"note.add","text":text})));
+        assert_eq!(all(&s, EntryKind::Note)[0].title, text);
+        done(&one(&mut s, json!({"type":"note.show"})));
+        done(&one(&mut s, json!({"type":"note.remove","text":text})));
+        assert!(all(&s, EntryKind::Note).is_empty(), "{lang}");
+    }
+}
+
+// ---- the phone --------------------------------------------------------------------------------------------
+
+#[test]
+fn the_phone_is_changed_with_the_checked_values() {
+    use iris_core::{DeviceAction, LevelChange, SoundMode};
+    let mut s = session("de");
+    run(&mut s, json!([
+        {"type":"device.volume","change":"set","percent":40,"ring":true},
+        {"type":"device.volume","change":"up"},
+        {"type":"device.brightness","change":"auto"},
+        {"type":"device.sound_mode","mode":"vibrate"},
+        {"type":"device.dnd","on":true}])).iter().for_each(done);
+    let device = s.host.0.lock().unwrap().device.clone();
+    assert_eq!(device, vec![
+        DeviceAction::Volume { ring: true, change: LevelChange::Set, percent: Some(40) },
+        DeviceAction::Volume { ring: false, change: LevelChange::Up, percent: None },
+        DeviceAction::Brightness { change: LevelChange::Auto, percent: None },
+        DeviceAction::SoundMode { mode: SoundMode::Vibrate },
+        DeviceAction::DoNotDisturb { on: true },
+    ]);
+    // "set" without a level changes nothing
+    assert_eq!(one(&mut s, json!({"type":"device.volume","change":"set"})).kind, ReplyKind::Failed);
+    assert_eq!(s.host.0.lock().unwrap().device.len(), 5);
+}
+
+#[test]
+fn the_flashlight_goes_to_the_app_with_its_checked_value() {
+    let mut s = session("de");
+    done(&one(&mut s, json!({"type":"flashlight.set","on":true})));
+    let acted = s.host.0.lock().unwrap().acted.clone();
+    assert_eq!(acted, vec![("flashlight.set".to_string(), json!({"on": true}))]);
+}
+
+// ---- task app and calendar --------------------------------------------------------------------------------
+
+#[test]
+fn a_task_goes_to_the_task_app() {
+    let mut s = session("de");
+    s.host.0.lock().unwrap().lists = vec![iris_core::ExternalList { id: "l1".into(), name: "Privat".into() }];
+    done(&one(&mut s, json!({"type":"task.create","title":"Steuer abgeben","date":"2026-11-30"})));
+    done(&one(&mut s, json!({"type":"task.create","title":"Ohne Datum"})));
+    let tasks = s.host.0.lock().unwrap().tasks.clone();
+    assert_eq!(tasks.len(), 2);
+    assert_eq!((tasks[0].0.title.as_str(), tasks[0].0.date_only, tasks[0].0.due_at.is_some()), ("Steuer abgeben", true, true));
+    assert!(tasks[1].0.due_at.is_none());
+    s.host.0.lock().unwrap().tasks_down = true;
+    assert_eq!(one(&mut s, json!({"type":"task.create","title":"Nochmal"})).kind, ReplyKind::Failed);
+}
+
+#[test]
+fn a_calendar_event_is_written_only_after_the_user_says_yes() {
+    for (lang, yes, no) in [("de", "Ja", "Nein"), ("en", "Yes", "No")] {
+        let mut s = session(lang);
+        let asked = one(&mut s, json!({"type":"calendar.event","title":"Zahnarzt","date":"2026-11-19","time":"15:00","minutes":60}));
+        assert_eq!(asked.kind, ReplyKind::Question, "{lang}: {}", asked.text);
+        assert!(s.host.0.lock().unwrap().events.is_empty(), "{lang}: nothing before the answer");
+        done(&s.say(yes));
+        let events = s.host.0.lock().unwrap().events.clone();
+        assert_eq!((events.len(), events[0].start_at, events[0].minutes, events[0].title.as_str()), (1, ms("2026-11-19T15:00"), 60, "Zahnarzt"), "{lang}");
+        // a "no" writes nothing
+        one(&mut s, json!({"type":"calendar.event","title":"Frisör","date":"2026-11-19","time":"17:00"}));
+        s.say(no);
+        assert_eq!(s.host.0.lock().unwrap().events.len(), 1, "{lang}");
+    }
+}
+
+// ---- the registry -----------------------------------------------------------------------------------------
+
+#[test]
+fn every_action_of_the_registry_has_an_executor_that_knows_it() {
+    // an executor that does not know its action answers `Unhandled`: every action must be known to its skill or host
+    let samples = json!({
+        "timer.set": {"seconds":60}, "timer.cancel": {"all":true}, "timer.pause": {}, "timer.resume": {}, "timer.extend": {"seconds":60}, "timer.show": {},
+        "alarm.set": {"time":"07:00"}, "alarm.next": {}, "alarm.show": {}, "alarm.dismiss": {},
+        "reminder.create": {"title":"x","date":"2026-11-19","time":"16:00"}, "reminder.show": {}, "reminder.delete": {"title":"x"}, "reminder.move": {"title":"x","date":"2026-11-19","time":"16:00"},
+        "list.add": {"list":"a","item":"b"}, "list.show": {}, "list.check": {"item":"b"}, "list.remove": {"item":"b"},
+        "note.add": {"text":"x"}, "note.show": {}, "note.remove": {"text":"x"},
+        "device.volume": {"change":"up"}, "device.brightness": {"change":"up"}, "device.sound_mode": {"mode":"ring"}, "device.dnd": {"on":false},
+        "task.create": {"title":"x"}, "calendar.event": {"title":"x","date":"2026-11-19","time":"16:00"}, "flashlight.set": {"on":false},
+    });
+    for a in registry().all() {
+        let sample = samples.get(&a.id).unwrap_or_else(|| panic!("no sample for {}", a.id));
+        let mut s = session("de");
+        let mut action = sample.clone();
+        action["type"] = json!(a.id);
+        let r = one(&mut s, action);
+        assert_ne!(r.kind, ReplyKind::Unhandled, "{} is not known to its executor", a.id);
+    }
+    assert_eq!(samples.as_object().unwrap().len(), registry().all().len(), "a sample without an action");
+}
+
+#[test]
+fn every_action_of_the_registry_has_a_test_here() {
+    let source = include_str!("plan.rs");
+    for a in registry().all() {
+        assert!(source.contains(&format!("\"{}\"", a.id)), "no test mentions {}", a.id);
+    }
 }

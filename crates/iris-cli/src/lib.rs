@@ -43,6 +43,8 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Default)]
 pub struct FakeState {
+    /// Actions only the app can carry out (`Host::act`), in order, with their checked arguments.
+    pub acted: Vec<(String, serde_json::Value)>,
     pub now_ms: i64,
     pub zone: String,
     pub settings: HashMap<String, String>,
@@ -85,6 +87,10 @@ impl Host for FakeHost {
     }
     fn setting(&self, key: &str) -> Option<String> {
         self.0.lock().unwrap().settings.get(key).cloned()
+    }
+    fn act(&self, action: &str, args: &serde_json::Value) -> Result<String, HostError> {
+        self.0.lock().unwrap().acted.push((action.to_string(), args.clone()));
+        Ok(format!("done: {action}"))
     }
     fn schedule(&self, entry: &Entry) -> Result<(), HostError> {
         self.0.lock().unwrap().scheduled.push(entry.id.clone());

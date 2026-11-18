@@ -7,6 +7,7 @@
 //! No word of any spoken language is written in this crate's code. Language lives in
 //! `core/lang/<code>.toml` ([`LangPack`]) and in each skill's own language files.
 
+pub mod actions;
 pub mod engine;
 pub mod entry;
 pub mod host;

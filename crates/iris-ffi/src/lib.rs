@@ -30,6 +30,10 @@ pub trait Phone: Send + Sync {
     /// `notifications`, `http`, `location`. The planner leaves out the actions the phone cannot carry out.
     fn has_capability(&self, name: String) -> bool;
 
+    /// Carries out an action only the app can (`flashlight.set`) with its checked arguments (JSON object). Returns what
+    /// to tell the user, or `None` when it could not be done.
+    fn act(&self, action: String, args: String) -> Option<String>;
+
     /// The lists of the user's task app as JSON `[{"id","name"}]`; `None` when there is no such app.
     fn task_lists(&self) -> Option<String>;
     /// Creates a task (JSON of an external task). Returns the name of the list it went to.
@@ -82,6 +86,9 @@ impl Host for Bridge {
     }
     fn setting(&self, key: &str) -> Option<String> {
         self.0.setting(key.to_string())
+    }
+    fn act(&self, action: &str, args: &serde_json::Value) -> Result<String, HostError> {
+        self.0.act(action.to_string(), args.to_string()).ok_or(HostError::Unavailable)
     }
     fn schedule(&self, entry: &Entry) -> Result<(), HostError> {
         let json = serde_json::to_string(entry).map_err(|e| HostError::Failed(e.to_string()))?;
@@ -247,7 +254,7 @@ pub struct IrisCore {
     engine: Mutex<Engine>,
     brain: Arc<BrainSlot>,
     /// The clock of the planning turn in progress: taken when the planner prompt is made, used to check its answer.
-    turn: Mutex<Option<(i64, String)>>,
+    turn: Mutex<Option<Turn>>,
 }
 
 #[uniffi::export]
@@ -316,21 +323,27 @@ impl IrisCore {
         serde_json::to_string(&reply).unwrap_or_default()
     }
 
-    /// Carries out one action of an accepted plan (`kind` and `sentence` as `plan_validate` returned them) with the
-    /// skill that action belongs to and nothing else (see `Engine::process_planned`). Same reply JSON as `process`;
-    /// `unhandled` means nothing was done.
-    pub fn process_planned(&self, kind: String, sentence: String, lang: String) -> String {
-        let planned = iris_core::plan::Planned { kind, sentence };
-        let reply = self.engine.lock().unwrap().process_planned(&planned, &lang);
+    /// Carries out one action of an accepted plan: `action` (`timer.set`) and `args` (JSON object) exactly as
+    /// `plan_validate` returned them, with the executor the registry names. Nothing is read again from text. Same
+    /// reply JSON as `process`; `unhandled` means nothing was done.
+    pub fn execute_action(&self, action: String, args: String, lang: String) -> String {
+        let Ok(serde_json::Value::Object(args)) = serde_json::from_str::<serde_json::Value>(&args) else {
+            return serde_json::to_string(&iris_core::Reply::new(iris_core::ReplyKind::Unhandled, "")).unwrap_or_default();
+        };
+        let reply = self.engine.lock().unwrap().execute(&action, &args, &lang);
         serde_json::to_string(&reply).unwrap_or_default()
     }
 
     /// Where a sentence goes at AI-use `level` (1 sparing .. 4 AI first): "local", "talk" (the assistant answers in
     /// text) or "plan" (the assistant proposes actions, see `plan_prompt` and `plan_validate`). An answer to an
-    /// open question of the core is always "local".
+    /// open question of the core, and one plain command the local network is sure of ("Taschenlampe an"), are
+    /// "local" at every level.
     pub fn route(&self, level: u8, text: String, lang: String) -> String {
-        let open = self.engine.lock().unwrap().has_question();
-        match iris_core::plan::route(level, &text, &lang, open) {
+        let (open, direct) = {
+            let engine = self.engine.lock().unwrap();
+            (engine.has_question(), engine.direct(&text, &lang))
+        };
+        match iris_core::plan::route(level, &text, &lang, open, direct) {
             iris_core::plan::Route::Local => "local",
             iris_core::plan::Route::Talk => "talk",
             iris_core::plan::Route::Plan => "plan",
@@ -338,30 +351,30 @@ impl IrisCore {
         .to_string()
     }
 
-    /// What the assistant is told to plan actions: the contract for the action families this phone can carry out, and
-    /// this turn's clock. The clock is kept, so `plan_validate` checks the answer against the same instant. `None`
-    /// for a language the planner has no words for, or when the phone can carry out none of the actions.
-    pub fn plan_prompt(&self, lang: String) -> Option<String> {
-        let (clock, families) = {
+    /// What the assistant is told to plan actions for `request`: the contract for the tools this request needs and this
+    /// phone can carry out, and this turn's clock. The clock and the tools are kept, so `plan_validate` checks the answer
+    /// against the same instant and the same offer. `None` for a language the planner has no words for, or when the
+    /// phone can carry out none of the actions.
+    pub fn plan_prompt(&self, lang: String, request: String) -> Option<String> {
+        let (clock, available) = {
             let engine = self.engine.lock().unwrap();
-            (engine.turn_clock(), engine.plan_families())
+            (engine.turn_clock(), engine.available_actions())
         };
-        let prompt = iris_core::plan::prompt(&lang, clock.0, &clock.1, &families);
-        *self.turn.lock().unwrap() = prompt.is_some().then_some(clock);
-        prompt
+        let prompt = iris_core::plan::prompt(&lang, clock.0, &clock.1, &request, &available);
+        *self.turn.lock().unwrap() = prompt.as_ref().map(|p| Turn { now_ms: clock.0, zone: clock.1.clone(), tools: p.tools.clone() });
+        prompt.map(|p| p.text)
     }
 
-    /// Checks the assistant's whole reply against the contract, the turn's clock and what this phone can carry out.
-    /// JSON: `{"kind":"actions","actions":[{"kind","sentence"}]}`, `{"kind":"ask","slot","question"}`,
-    /// `{"kind":"not_action"}` or `{"kind":"rejected","reason"}`. Nothing is carried out here: the host says each
-    /// sentence to `process`.
+    /// Checks the assistant's whole reply against the contract, the turn's clock and the tools that were offered.
+    /// JSON: `{"kind":"actions","actions":[{"id","args"}]}`, `{"kind":"ask","slot","question"}`,
+    /// `{"kind":"not_action"}` or `{"kind":"rejected","reason"}`. Nothing is carried out here: the host hands each
+    /// action to `execute_action`.
     pub fn plan_validate(&self, raw: String, lang: String) -> String {
-        let (host_clock, families) = {
-            let engine = self.engine.lock().unwrap();
-            (engine.turn_clock(), engine.plan_families())
-        };
-        let (now_ms, zone) = turn_for_validation(self.turn.lock().unwrap().take(), host_clock);
-        serde_json::to_string(&iris_core::plan::validate(&raw, &lang, now_ms, &zone, &families)).unwrap_or_default()
+        let host_clock = self.engine.lock().unwrap().turn_clock();
+        let kept = self.turn.lock().unwrap().take();
+        let tools = kept.as_ref().map(|t| t.tools.clone()).unwrap_or_default();
+        let (now_ms, zone) = turn_for_validation(kept.map(|t| (t.now_ms, t.zone)), host_clock);
+        serde_json::to_string(&iris_core::plan::validate(&raw, &lang, now_ms, &zone, &tools)).unwrap_or_default()
     }
 
     /// The user dismissed the question the core waits on: it is dropped, and only it. Entries that exist stay.
@@ -398,6 +411,13 @@ impl IrisCore {
 
 /// How long the clock of a planning turn is kept: an answer that takes longer than this is checked against the
 /// current time instead.
+/// What the planner was told for one request: the clock it was given and the tools on offer.
+struct Turn {
+    now_ms: i64,
+    zone: String,
+    tools: Vec<String>,
+}
+
 const TURN_CLOCK_TTL_MS: i64 = 10 * 60_000;
 
 /// The clock to check an answer against: the one the prompt was made with (one clock per turn), unless there was

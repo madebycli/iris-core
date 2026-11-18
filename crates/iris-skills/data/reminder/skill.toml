@@ -14,6 +14,9 @@ id = "delete"
 
 # answers to the skill's own questions
 [[intent]]
+id = "event.confirm"
+
+[[intent]]
 id = "create.time"
 
 [[intent]]

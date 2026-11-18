@@ -23,6 +23,11 @@ pub trait Skill: Send + Sync {
     fn language(&self, code: &str) -> Option<&'static str>;
     /// Carries out `intent`. `None` means "not mine after all": the engine tries the next candidate.
     fn handle(&self, intent: &str, cx: &mut Cx) -> Option<Reply>;
+    /// Carries out an action of the plan contract (`actions.toml`) with its checked arguments. The values arrive as
+    /// the plan checked them, not as a sentence: nothing is read again. `None`: this skill does not know the action.
+    fn act(&self, _action: &str, _args: &crate::actions::Args, _cx: &mut Cx) -> Option<Reply> {
+        None
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
