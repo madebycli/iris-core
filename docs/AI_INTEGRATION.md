@@ -93,80 +93,143 @@ the core's own sentence, not the assistant's text, and it never comes with actio
 assistant as a text question. Date and time are resolved once, in the core: the executor receives `at_ms`.
 
 **Execution.** A checked action goes to its executor as an action id with its checked values, **never as a sentence to
-read again**: `Engine::execute(id, args)` calls `Skill::act` of the skill the registry names, or `Host::act` (Android's
-`Phone.act`) for a function only the app has. The executor uses the skill's own code after the point where the old path
-had parsed the sentence, so replies, undo, scheduling and the skill's confirmations are the same as for a spoken request.
-The host executes the actions one after another. A skill that asks something back (a confirmation, a missing value) ends
-the run there; an action that fails, finds nothing or finds several entries (`action_unclear`: nothing is changed) stops
-the rest; what was done is reported and the rest is counted as still open. Nothing is repeated after an uncertain
-outcome. While a question of the core is open, `execute` does nothing.
+read again**. `Engine::plan_run(actions)` runs the actions in order: a core action calls `Skill::act` of the skill the
+registry names (same replies, undo, scheduling and confirmations as a spoken request); a step only the app can do comes back
+in `host` (`{action, args}`), Android runs it with its own code (`hostAct`) and reports `plan_continue(ok)`. The run stops at
+a question, at a step of the app and at the first action that fails, finds nothing, finds several entries
+(`action_unclear`: nothing is changed) or has an unknown outcome. What was done is reported and the steps that did not run
+are counted (`left`, "Noch offen: …"). Nothing is repeated.
+
+**A plan that waits goes on exactly once.** The validated actions that have not run yet stay in the core while the plan waits.
+(1) The core asked a confirmation ("Termin eintragen?"): the answer goes through `Engine::process`; only if the skill
+completed the confirmed step (`Cx::proceed`) the rest runs, once. "Nein", "Lassen wir's", another request, a failure, an
+expired question (`question_ttl`), a question dismissed with `cancel_question` and anything unclear drop the rest; a later
+"ja" then finds nothing waiting. (2) The app asked its own question (which contact, which app): Android calls `plan_wait`,
+handles the answer as always and reports a completed step with `plan_continue(ok)`; anything else, or a new request, calls
+`plan_drop`. While a question of the core is open, no other plan action runs.
 
 **Permissions and confirmations stay.** Android's runtime permissions are checked by the same device code as for a spoken
 request (`Denied` opens the settings screen). A calendar entry is never written before the user said yes
 (`calendar.event` asks, the reminder skill's `event.confirm` writes), an alarm is dismissed only after the alarm skill's
 question, and the calendar is offered to the planner only while the permission is granted.
 
-**A rejected plan changes nothing.** If the core rejects the proposal, nothing is carried out and the sentence is not
-handed to the local interpretation again; Iris says that she could not be sure and asks to rephrase. (An unreachable
-provider or a core that has no prompt does leave the sentence to the local path: nothing was proposed then.)
+**A rejected plan or an unreachable provider changes nothing.** If the core rejects the proposal, or the provider times out or
+refuses (a transport failure), nothing is carried out and the sentence is **not** handed to the local interpretation: it went
+to the planner because the local reading is not trusted for it. Iris says so and asks to say it again. (A core that has no
+prompt for the request, or the consent or the setting being off, leaves the sentence to the local path: nothing was
+proposed and nothing was sent.)
 
 **Dismissing a question.** `Engine::cancel_question` drops the open question and nothing else: running timers and
 existing entries stay, and nothing is created from the half-finished request. Android ends an open planner question with
 a dismissal of any length ("Es reicht, ich brauche keinen Timer mehr"): nothing goes to the assistant again.
 
-#### The actions
+#### The actions (50)
 
-`exec` is the skill whose `act` carries it out (`host`: the app). Needs: capabilities the host must report. Every action
-has a test in `crates/iris-cli/tests/plan.rs` (`every_action_of_the_registry_has_a_test_here` and
-`every_action_of_the_registry_has_an_executor_that_knows_it` keep the table and the tests honest) and a description in
-every language file (`plan::tests::the_language_data_is_valid_and_describes_every_action`).
+`exec` is the skill whose `act` carries it out; `host (Android)`: a step only the app can do, handed to Android with its checked
+values. Needs: capabilities the host must report (`Phone.has_capability`). Every action has a test in
+`crates/iris-cli/tests/plan.rs` (`every_action_of_the_registry_has_a_test_here` and `..._has_an_executor_that_knows_it` keep
+the table and the tests honest) and a description and tool words in every language file (`plan::tests::the_language_data_is_valid_and_describes_every_action`).
+Arguments marked `?` are optional.
 
-| Action | Arguments (checked) | exec | Needs | Test (`plan.rs`) |
-|---|---|---|---|---|
-| `timer.set` | `seconds` 1..86400, `label`? | timer | schedule | `timers_are_set_shown_paused_resumed_extended_and_cancelled` |
-| `timer.cancel` | `label`?, `all`? | timer | schedule | same; `several_timers_without_a_name_are_not_guessed` |
-| `timer.pause` / `timer.resume` | `label`? | timer | schedule | same |
-| `timer.extend` | `seconds`, `label`? | timer | schedule | same |
-| `timer.show` | `label`? | timer | – | same |
-| `alarm.set` | `time`, `date`? (→ `at_ms`) | alarm | alarm (clock app) | `an_alarm_is_set_with_a_date_or_for_the_next_time_the_clock_shows_it` |
-| `alarm.next` / `alarm.show` | – | alarm | alarm | `the_next_alarm_is_asked_for_and_dismissing_asks_first` |
-| `alarm.dismiss` | `time`? | alarm (asks first) | alarm | same |
-| `reminder.create` | `title`, `date`, `time` (→ `at_ms`) | reminder | schedule | `reminders_are_created_shown_moved_and_deleted` |
-| `reminder.show` | – | reminder | – | same |
-| `reminder.delete` | `title` | reminder | schedule | same; `a_title_that_fits_two_reminders_changes_nothing` |
-| `reminder.move` | `title`, `date`, `time` | reminder | schedule | same |
-| `list.add` | `list`, `item` | lists | – | `list_entries_are_added_shown_ticked_off_and_removed` |
-| `list.show` | `list`? | lists | – | same |
-| `list.check` / `list.remove` | `item`, `list`? | lists | – | same |
-| `note.add` / `note.remove` | `text` | notes | – | `notes_are_added_shown_and_removed` |
-| `note.show` | – | notes | – | same |
-| `device.volume` | `change` up/down/set, `percent`?, `ring`? | device | device | `the_phone_is_changed_with_the_checked_values` |
-| `device.brightness` | `change` up/down/set/auto, `percent`? | device | device | same |
-| `device.sound_mode` | `mode` ring/vibrate/silent | device | device | same |
-| `device.dnd` | `on` | device | device | same |
-| `task.create` | `title`, `date`? | reminder (task app) | tasks (CalDAV set up) | `a_task_goes_to_the_task_app` |
-| `calendar.event` | `title`, `date`, `time`, `minutes`? | reminder (asks first) | calendar (permission) | `a_calendar_event_is_written_only_after_the_user_says_yes` |
-| `flashlight.set` | `on` | host (`Phone.act`) | flashlight (torch) | `the_flashlight_goes_to_the_app_with_its_checked_value` |
+| Action | Arguments | exec | Needs | Confirmation | Test |
+|---|---|---|---|---|---|
+| `timer.set` | seconds, label? | timer | schedule |  | `timers_are_set_shown_paused_resumed_extended_and_cancelled` |
+| `timer.cancel` | label?, all? | timer | schedule |  | `timers_are_set_shown_paused_resumed_extended_and_cancelled` |
+| `timer.pause` | label? | timer | schedule |  | `timers_are_set_shown_paused_resumed_extended_and_cancelled` |
+| `timer.resume` | label? | timer | schedule |  | `timers_are_set_shown_paused_resumed_extended_and_cancelled` |
+| `timer.extend` | seconds, label? | timer | schedule |  | `timers_are_set_shown_paused_resumed_extended_and_cancelled` |
+| `timer.show` | label? | timer | – |  | `timers_are_set_shown_paused_resumed_extended_and_cancelled` |
+| `alarm.set` | time, date?, repeat? | alarm | alarm |  | `an_alarm_is_set_with_a_date_or_for_the_next_time_the_clock_shows_it` |
+| `alarm.next` | – | alarm | alarm |  | `the_next_alarm_is_asked_for_and_dismissing_asks_first` |
+| `alarm.show` | – | alarm | alarm |  | `the_next_alarm_is_asked_for_and_dismissing_asks_first` |
+| `alarm.dismiss` | time? | alarm | alarm | asks first | `the_next_alarm_is_asked_for_and_dismissing_asks_first` |
+| `reminder.create` | title, date, time, repeat? | reminder | schedule |  | `reminders_are_created_shown_moved_and_deleted` |
+| `reminder.show` | – | reminder | – |  | `reminders_are_created_shown_moved_and_deleted` |
+| `reminder.delete` | title | reminder | schedule |  | `a_title_that_fits_two_reminders_changes_nothing` |
+| `reminder.move` | title, date, time | reminder | schedule |  | `reminders_are_created_shown_moved_and_deleted` |
+| `list.add` | list, item | lists | – |  | `list_entries_are_added_shown_ticked_off_and_removed` |
+| `list.show` | list? | lists | – |  | `list_entries_are_added_shown_ticked_off_and_removed` |
+| `list.check` | item, list? | lists | – |  | `list_entries_are_added_shown_ticked_off_and_removed` |
+| `list.remove` | item, list? | lists | – |  | `list_entries_are_added_shown_ticked_off_and_removed` |
+| `note.add` | text | notes | – |  | `notes_are_added_shown_and_removed` |
+| `note.show` | – | notes | – |  | `notes_are_added_shown_and_removed` |
+| `note.remove` | text | notes | – |  | `notes_are_added_shown_and_removed` |
+| `device.volume` | change, percent?, ring? | device | device |  | `the_phone_is_changed_with_the_checked_values` |
+| `device.brightness` | change, percent? | device | device |  | `the_phone_is_changed_with_the_checked_values` |
+| `device.sound_mode` | mode | device | device |  | `the_phone_is_changed_with_the_checked_values` |
+| `device.dnd` | on | device | device |  | `the_phone_is_changed_with_the_checked_values` |
+| `task.create` | title, date? | reminder | tasks |  | `a_task_goes_to_the_task_app` |
+| `calendar.event` | title, date, time, minutes? | reminder | calendar | asks first | `after_a_yes_the_event_and_the_reminder_exist_exactly_once` |
+| `flashlight.set` | on | host (Android) | flashlight |  | `a_step_only_the_app_can_do_is_handed_over_with_its_checked_values (core); AssistantPlanTest (app)` |
+| `reminder.snooze` | seconds? | reminder | schedule |  | `a_reminder_that_just_rang_is_snoozed_by_the_given_time` |
+| `clock.time` | – | clock | – |  | `the_clock_the_stopwatch_and_unit_conversion_answer` |
+| `clock.date` | – | clock | – |  | `the_clock_the_stopwatch_and_unit_conversion_answer` |
+| `stopwatch.start` | – | stopwatch | – |  | `the_clock_the_stopwatch_and_unit_conversion_answer` |
+| `stopwatch.stop` | – | stopwatch | – |  | `the_clock_the_stopwatch_and_unit_conversion_answer` |
+| `stopwatch.reset` | – | stopwatch | – |  | `the_clock_the_stopwatch_and_unit_conversion_answer` |
+| `stopwatch.show` | – | stopwatch | – |  | `the_clock_the_stopwatch_and_unit_conversion_answer` |
+| `convert.units` | value, from, to | convert | – |  | `the_clock_the_stopwatch_and_unit_conversion_answer` |
+| `search.web` | query | device | device |  | `a_web_search_and_what_plays_and_notifications` |
+| `music.playing` | – | device | media |  | `a_web_search_and_what_plays_and_notifications` |
+| `notification.read` | from? | device | notifications |  | `a_web_search_and_what_plays_and_notifications` |
+| `notification.reply` | message, from? | device | notifications | asks first | `a_reply_to_a_notification_always_asks_before_it_sends` |
+| `music.control` | action, query? | host (Android) | media |  | `a_step_only_the_app_can_do_is_handed_over_with_its_checked_values (core); AssistantPlanTest (app)` |
+| `app.open` | app | host (Android) | apps |  | `a_step_only_the_app_can_do_is_handed_over_with_its_checked_values (core); AssistantPlanTest (app)` |
+| `navigation.start` | place | host (Android) | maps |  | `a_step_only_the_app_can_do_is_handed_over_with_its_checked_values (core); AssistantPlanTest (app)` |
+| `call.start` | contact | host (Android) | contacts |  | `a_step_only_the_app_can_do_is_handed_over_with_its_checked_values (core); AssistantPlanTest (app)` |
+| `weather.show` | date?, place? | host (Android) | weather |  | `a_step_only_the_app_can_do_is_handed_over_with_its_checked_values (core); AssistantPlanTest (app)` |
+| `calendar.show` | date?, days? | host (Android) | calendar_read |  | `a_step_only_the_app_can_do_is_handed_over_with_its_checked_values (core); AssistantPlanTest (app)` |
+| `day.overview` | tomorrow? | host (Android) | weather |  | `a_step_only_the_app_can_do_is_handed_over_with_its_checked_values (core); AssistantPlanTest (app)` |
+| `battery.show` | – | host (Android) | – |  | `a_step_only_the_app_can_do_is_handed_over_with_its_checked_values (core); AssistantPlanTest (app)` |
+| `calculator.compute` | expression | host (Android) | – |  | `a_step_only_the_app_can_do_is_handed_over_with_its_checked_values (core); AssistantPlanTest (app)` |
+| `joke.tell` | – | host (Android) | – |  | `a_step_only_the_app_can_do_is_handed_over_with_its_checked_values (core); AssistantPlanTest (app)` |
 
-#### What Iris can do that is **not** an action yet (gaps, stated on purpose)
+#### Inventory: everything Iris does today, and how the assistant reaches it
 
-These stay on the local path (and are never started by the assistant). They are reached by the user's own words, with the
-consent and confirmation each already has.
+| Iris function (classifier label / skill) | Local | Planner action | Remark |
+|---|---|---|---|
+| timer set / query / cancel / pause / resume / extend | yes | `timer.*` | |
+| alarm set / next / list / dismiss | yes | `alarm.*` | one-off and repeating (daily, weekdays, weekly) |
+| reminder create / list / delete / move / snooze | yes | `reminder.*` | repeating via `repeat`; snooze acts on the reminder that rang last |
+| lists: add / read / check / remove | yes | `list.*` | "empty a list" (asks first) stays spoken |
+| notes: add / read / remove | yes | `note.*` | "delete all notes" (asks first) stays spoken |
+| time, date | yes | `clock.time`, `clock.date` | |
+| stopwatch | yes | `stopwatch.*` | |
+| unit conversion | yes | `convert.units` | units as words of the user's language |
+| volume, brightness, sound mode, do not disturb | yes | `device.*` | system permissions as for a spoken request |
+| web search in the browser | yes | `search.web` | the online research AI is not an action: it only delivers content |
+| what is playing | yes | `music.playing` | |
+| notifications: read / reply | yes | `notification.read`, `notification.reply` | a reply always asks "send?" first |
+| flashlight on / off | yes (every level, no request) | `flashlight.set` | |
+| music: play / pause / next / previous | yes (every level) | `music.control` | |
+| open an app | yes (every level) | `app.open` | several matches: the app asks which; the plan waits |
+| navigation | yes (every level) | `navigation.start` | |
+| call | yes (every level) | `call.start` | contacts permission; several numbers: the app asks which; the plan waits |
+| weather (day, place) | yes (every level) | `weather.show` | |
+| calendar: read out | yes (every level) | `calendar.show` | read permission |
+| calendar: create | yes | `calendar.event` | asks "write it?" first |
+| task app: create | yes | `task.create` | task app set up |
+| day overview | yes (every level) | `day.overview` | |
+| battery | yes (every level) | `battery.show` | |
+| calculator | yes (every level) | `calculator.compute` | digits and operators only |
+| joke | yes (every level) | `joke.tell` | |
 
-- **Answers and lookups** (read-only, they return content, not a change): weather, the clock and date, battery, the
-  school timetable and its messages, anime lists, the day overview, translation, calculator, lyrics, jokes, search the
-  web, what is playing, notifications. A mixed order that contains one ("Wie wird das Wetter und erinnere mich …") is
-  planned for the part that has actions; the question part goes to the assistant as text, not as an action.
-- **Contacts and communication with a confirmation flow in Kotlin**: calls, replying to a notification, sending a message.
-- **Music control, opening an app, navigation, the phone's settings panels, song recognition**: the Android assistant
-  does them from its own labels (`music_*`, `open_app`, `navigation`, `system_settings`); no typed contract yet.
-- **Reminder snooze** ("nochmal in 10 Minuten") depends on which reminder just rang and stays a spoken follow-up;
-  **repeating alarms and reminders** and **alarm times with a repeat** are not in the contract (a one-off moment only).
-- **Memory** ("merk dir …"): the memory feature has its own consent and review screen.
-- **Calendar read** ("was steht an"): a query.
+**Gaps, stated on purpose.** These Iris functions are reached by the user's own words only; the assistant cannot start them as
+a plan step yet:
 
-Adding an action needs a registry entry, a description per language, the `act` of its executor (or `Phone.act`), a test
-against the real engine and tests for rejected and unavailable operations.
+- **Translation and lyrics**: they need the existing one-time "may I send this to a lookup site?" consent, which only the
+  Kotlin assistant holds (`Pending.Online`); no typed contract yet.
+- **School (Untis) queries and anime tracker queries and list changes**: many query shapes read from a sentence frame
+  (`heads`, `slots`); the anime list changes ask for a yes in Kotlin. No typed contract yet.
+- **Task app: read the tasks** (`tasks_list`) and **memory** (`memory_remember`, `memory_recall`): not in the registry yet
+  (memory has its own review screen).
+- **The phone's settings panels** (`system_settings`) and **song recognition** (`song_recognize`, opens another app).
+- **Smalltalk** is answered locally or by the conversation AI, never as an action.
+- **Alarm and reminder repeats on specific weekdays** ("montags und mittwochs"): only daily, weekdays and weekly.
+- A calendar entry with a repeat, and an alarm with a date further than a year ahead.
+
+Adding an action needs a registry entry, a description and tool words per language, the `act` of its executor (or a branch in
+Android's `hostAct`), a test against the real engine and tests for rejected and unavailable operations.
 
 ## Tidying up entries (`iris-cloud::organize`)
 
