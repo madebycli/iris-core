@@ -6,6 +6,7 @@
 //! reached the reminder is kept in Iris and the reply says so — a reminder is never dropped.
 
 use crate::{join, strip};
+use iris_core::actions::Args;
 use iris_core::time::{describe, resolve, scan, HalfDay, Resolved, TimeError, TimeExpr};
 use iris_core::{Card, Cx, Entry, EntryKind, ExternalEvent, ExternalTask, Reply, Skill};
 use serde_json::json;
@@ -23,6 +24,60 @@ impl Skill for Reminder {
             "en" => Some(include_str!("../data/reminder/en.toml")),
             _ => None,
         }
+    }
+
+    fn act(&self, action: &str, args: &Args, cx: &mut Cx) -> Option<Reply> {
+        let title = args.text("title").map(str::to_string);
+        let at = args.at_ms().and_then(|ms| jiff::Timestamp::from_millisecond(ms).ok());
+        Some(match action {
+            "reminder.create" => {
+                let draft = Draft { title: title?, ..Draft::default() };
+                let repeat = match args.text("repeat") {
+                    Some("daily") => Some(iris_core::time::Repeat::Daily),
+                    Some("weekdays") => Some(iris_core::time::Repeat::Weekdays),
+                    Some("weekly") => Some(iris_core::time::Repeat::Weekly),
+                    _ => None,
+                };
+                save(cx, &draft, &Resolved { at: at?, date_only: false, assumed_half_day: false, repeat })
+            }
+            "reminder.show" => list(cx),
+            "reminder.snooze" => match snooze_by(cx, args.int("seconds").unwrap_or(600)) {
+                Some(reply) => reply,
+                None => Reply::failed(cx.msg("not_found", &[])),
+            },
+            "reminder.delete" => match picked(cx, &title?) {
+                Ok(entry) => {
+                    cx.host.unschedule(&entry.id);
+                    cx.store.delete(&entry.id);
+                    Reply::done(cx.msg("deleted", &[("title", &entry.title)]))
+                }
+                Err(reply) => *reply,
+            },
+            "reminder.move" => match picked(cx, &title?) {
+                Ok(entry) => relocate(cx, entry, at?),
+                Err(reply) => *reply,
+            },
+            "task.create" => {
+                let date = args.text("date").and_then(|d| d.parse::<jiff::civil::Date>().ok());
+                let due = date.and_then(|d| d.at(9, 0, 0, 0).to_zoned(cx.now.time_zone().clone()).ok()).map(|z| z.timestamp());
+                let task = ExternalTask { title: title.clone()?, due_at: due.map(|t| t.as_millisecond()), date_only: date.is_some(), list_id: None, repeat: String::new() };
+                match cx.host.create_task(&task) {
+                    Ok(list) => {
+                        let when = due.map(|t| describe(t, &cx.now, cx.lang, true)).unwrap_or_default();
+                        Reply::done(cx.msg(if due.is_some() { "created_tasks" } else { "created_tasks_undated" }, &[("title", &title?), ("when", &when), ("list", &list)]))
+                    }
+                    Err(_) => Reply::failed(cx.msg("tasks_unreachable", &[])),
+                }
+            }
+            "calendar.event" => {
+                let minutes = args.int("minutes").unwrap_or(30);
+                let when = describe(at?, &cx.now, cx.lang, false);
+                // the calendar is written only after the user said yes: the confirmation of the calendar flow still applies
+                cx.ask("event.confirm", json!({ "title": title.clone()?, "at_ms": args.at_ms()?, "minutes": minutes }));
+                Reply::question(cx.msg("ask_event", &[("title", &title?), ("when", &when)]))
+            }
+            _ => return None,
+        })
     }
 
     fn handle(&self, intent: &str, cx: &mut Cx) -> Option<Reply> {
@@ -54,6 +109,9 @@ impl Skill for Reminder {
             "delete" => Some(delete(cx, false)),
             "delete.which" => Some(delete(cx, true)),
             "delete.confirm" => Some(delete_all(cx)),
+            "event.confirm" if cx.lang.dialog.is_no(&cx.utt.norm) => Some(Reply::done(cx.lang.messages.get("cancelled", &[]))),
+            "event.confirm" if !cx.lang.dialog.is_yes(&cx.utt.norm) => None,
+            "event.confirm" => Some(write_event(cx)),
             _ => None,
         }
     }
@@ -210,6 +268,31 @@ fn delete(cx: &mut Cx, answering: bool) -> Reply {
     }
 }
 
+/// The open reminder an action names by title, or the reply that says why there is none.
+fn picked(cx: &Cx, title: &str) -> Result<Entry, Box<Reply>> {
+    let items = open(cx);
+    match crate::by_title(&items, title) {
+        Ok(entry) => Ok(entry.clone()),
+        Err(crate::Miss::None) => Err(Box::new(Reply::failed(cx.msg("not_found", &[])))),
+        Err(crate::Miss::Several) => Err(Box::new(Reply::failed(cx.lang.messages.get("action_unclear", &[])))),
+    }
+}
+
+/// The user said yes to "write this to the calendar?": the event is created, or the reply says it could not be.
+fn write_event(cx: &mut Cx) -> Reply {
+    let title = cx.state["title"].as_str().unwrap_or_default().to_string();
+    let start_at = cx.state["at_ms"].as_i64().unwrap_or(0);
+    let minutes = cx.state["minutes"].as_u64().unwrap_or(30) as u32;
+    let when = jiff::Timestamp::from_millisecond(start_at).map(|t| describe(t, &cx.now, cx.lang, false)).unwrap_or_default();
+    match cx.host.create_event(&ExternalEvent { title: title.clone(), start_at, minutes, repeat: String::new() }) {
+        Ok(calendar) => {
+            cx.proceed();
+            Reply::done(cx.msg("created_calendar", &[("title", &title), ("when", &when), ("calendar", &calendar)]))
+        }
+        Err(_) => Reply::failed(cx.msg("calendar_unreachable", &[])),
+    }
+}
+
 fn delete_all(cx: &mut Cx) -> Reply {
     if !cx.lang.dialog.is_yes(&cx.utt.norm) {
         return Reply::done(cx.msg("kept", &[]));
@@ -263,19 +346,23 @@ fn shift(cx: &mut Cx, id: Option<String>, mut expr: TimeExpr, answering: bool) -
     // only a clock time ("auf 9 Uhr"): the same day as before, at the half of the day nearest the old time
     let at = same_day(&expr, &target, &cx.now).unwrap_or(resolved.at);
     let resolved = Resolved { at, ..resolved };
-    let mut moved = target.clone();
-    moved.due_at = Some(resolved.at.as_millisecond());
+    relocate(cx, target, resolved.at)
+}
+
+/// Moves `target` to `at` and says so.
+fn relocate(cx: &mut Cx, target: Entry, at: jiff::Timestamp) -> Reply {
+    let mut moved = target;
+    moved.due_at = Some(at.as_millisecond());
     cx.host.unschedule(&moved.id);
     cx.store.put(moved.clone());
     let _ = cx.host.schedule(&moved);
     cx.remember("last", &moved.id);
-    let when = describe(resolved.at, &cx.now, cx.lang, resolved.date_only);
+    let when = describe(at, &cx.now, cx.lang, false);
     Reply::done(cx.msg("moved", &[("title", &moved.title), ("when", &when)])).with_card(Card::Entries { title: cx.msg("card_title", &[]), items: vec![moved] })
 }
 
 /// "Erinnere mich in 10 Minuten nochmal": the reminder that just rang, again later (ten minutes unless said).
 fn snooze(cx: &mut Cx) -> Option<Reply> {
-    const WINDOW_MS: i64 = 30 * 60_000;
     let found = scan(&cx.utt.norms(), cx.lang);
     // a sentence that names a new thing to be reminded of is a new reminder
     let free: Vec<usize> = (0..cx.utt.len()).filter(|i| !found.used[*i]).collect();
@@ -283,9 +370,14 @@ fn snooze(cx: &mut Cx) -> Option<Reply> {
     if !title.is_empty() {
         return Some(create(cx, Draft::default()));
     }
+    snooze_by(cx, found.expr.relative_secs.unwrap_or(600))
+}
+
+/// The reminder that just rang (or was made last), again after `secs` seconds. `None` when there is none.
+fn snooze_by(cx: &mut Cx, secs: i64) -> Option<Reply> {
+    const WINDOW_MS: i64 = 30 * 60_000;
     let id = cx.recall("fired", WINDOW_MS).or_else(|| cx.recall("last", WINDOW_MS))?;
     let entry = cx.store.get(&id)?;
-    let secs = found.expr.relative_secs.unwrap_or(600);
     let at = cx.now.timestamp().checked_add(jiff::ToSpan::seconds(secs)).ok()?;
     let mut again = if entry.repeat.is_empty() {
         entry.clone()

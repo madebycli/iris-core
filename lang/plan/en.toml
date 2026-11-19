@@ -1,0 +1,117 @@
+# English words of the action planner. See de.toml.
+code = "en"
+
+[routing]
+reference = '(?iu)\b(why|what did i (?:say|mean|want)|how come|explain)\b'
+sequence = '(?iu)\b(and then|after that|then also|also|as well as|next)\b'
+command = '(?iu)\b(create|remind\w*|set|add|delete|change|move|call|open|note|alarm|timer|reminder|list|appointment|task)\b'
+question = '(?iu)^\s*(who|what|when|where|how|why|which)\b|\?\s*$'
+simple = [
+  '(?iu)^\W*(?:set|start)\s+(?:a\s+)?timer\s+(?:for|to)\s+\d+\s*\w*\W*$',
+  '(?iu)\b(what time|what day|what date)\b',
+  '(?iu)\b(volume|brightness|flashlight|do not disturb)\b',
+  '(?iu)^\W*(?:stop|cancel|undo|yes|no|thanks|hello|hi)\W*$',
+  '(?iu)^\W*show\b.{0,30}\b(?:reminders|timers|alarms|lists|notes)\W*$',
+]
+
+[format]
+weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+[ask]
+time = "At what time?"
+date = "For which day?"
+duration = "For how long?"
+title = "What should it be called?"
+list = "Which list?"
+
+[prompt]
+head = """You plan actions for the voice assistant Iris. Today is {weekday}, {today} (time zone {zone}), it is {time}.
+Answer with one JSON object only, no text before or after it. Three forms:
+{"version":2,"actions":[ ... ]}   actions to carry out
+{"version":2,"ask":{"slot":"time"}}   exactly one question, then no actions (slot: time, date, duration, title, list)
+{"version":2,"ask":{"slot":"other","question":"Which list do you mean?"}}   one short question in the language of the user when something is missing or unclear and no slot fits
+{"version":2,"not_action":true}   the message is no task for these actions"""
+actions_title = "Actions (all fields required unless marked optional):"
+rules = """Rules: At most 6 actions, only those listed above. date is YYYY-MM-DD, time is HH:MM in 24 hours, a moment lies at least two minutes in the future. Turn relative words (tomorrow, the day after, in two hours) into fixed values. Clock time, date and duration are separate values. Titles are short noun phrases without a verb and without punctuation, at most 80 characters. If something important is missing or the message is unclear, ask ONE short question (slot or other) instead of guessing or refusing; never say you cannot do something without asking first. If the message is a question, a chat, a programming or writing task or a request to you yourself, answer with not_action. Invent nothing."""
+
+[actions]
+"timer.set" = '{"type":"timer.set","seconds":600,"label":"Pasta"}   label optional. A duration appears only here, in seconds.'
+"timer.cancel" = '{"type":"timer.cancel","label":"Pasta"}   cancels a timer; label optional, "all":true for all. Only when asked.'
+"timer.pause" = '{"type":"timer.pause","label":"Pasta"}   label optional.'
+"timer.resume" = '{"type":"timer.resume","label":"Pasta"}   label optional.'
+"timer.extend" = '{"type":"timer.extend","seconds":120,"label":"Pasta"}   runs seconds longer; label optional.'
+"timer.show" = '{"type":"timer.show"}   shows how long running timers have left; label optional.'
+"alarm.set" = '{"type":"alarm.set","time":"15:40","date":"2026-11-19"}   date optional. If the user gives an arrival time and a travel or lead time, work out the wake-up time yourself.'
+"alarm.next" = '{"type":"alarm.next"}   says when the next alarm rings.'
+"alarm.show" = '{"type":"alarm.show"}   opens the alarm list of the clock app.'
+"alarm.dismiss" = '{"type":"alarm.dismiss","time":"07:00"}   time optional (else the next alarm). Iris asks first.'
+"reminder.create" = '{"type":"reminder.create","title":"Shoe store","date":"2026-11-19","time":"16:00"}'
+"reminder.show" = '{"type":"reminder.show"}   shows the open reminders.'
+"reminder.delete" = '{"type":"reminder.delete","title":"Dentist"}   title: the title of the existing reminder.'
+"reminder.move" = '{"type":"reminder.move","title":"Dentist","date":"2026-11-20","time":"09:00"}   moves an existing reminder.'
+"list.add" = '{"type":"list.add","list":"Shopping","items":["Milk","Bread"]}   all entries for one list in ONE action (up to 20); one action per list.'
+"list.show" = '{"type":"list.show","list":"Shopping"}   list optional.'
+"list.check" = '{"type":"list.check","item":"Milk","list":"Shopping"}   ticks an entry off; list optional.'
+"list.remove" = '{"type":"list.remove","item":"Milk","list":"Shopping"}   deletes an entry; list optional.'
+"list.check_all" = '{"type":"list.check_all","list":"Shopping"}   ticks off everything on the list.'
+"list.check_common" = '{"type":"list.check_common","list":"Meals","other":"Shopping"}   ticks off on list what is also on other. Iris checks this itself on the phone: you never see the lists, do not guess entries.'
+"note.add" = '{"type":"note.add","text":"Buy milk"}'
+"note.show" = '{"type":"note.show"}   reads the notes out.'
+"note.remove" = '{"type":"note.remove","text":"milk"}   text: part of the existing note.'
+"device.volume" = '{"type":"device.volume","change":"set","percent":40,"ring":false}   change: up, down, set (then percent); ring true for the ringer, otherwise media.'
+"device.brightness" = '{"type":"device.brightness","change":"set","percent":60}   change: up, down, set (then percent), auto.'
+"device.sound_mode" = '{"type":"device.sound_mode","mode":"vibrate"}   mode: ring, vibrate, silent.'
+"device.dnd" = '{"type":"device.dnd","on":true}   do not disturb on or off.'
+"task.create" = '{"type":"task.create","title":"File taxes","date":"2026-11-30"}   task in the task app; date optional.'
+"calendar.event" = '{"type":"calendar.event","title":"Dentist","date":"2026-11-19","time":"15:00","minutes":60}   calendar appointment; minutes optional. Iris asks before saving it.'
+"flashlight.set" = '{"type":"flashlight.set","on":true}   flashlight on or off.'
+
+"reminder.snooze" = '{"type":"reminder.snooze","seconds":600}   the reminder that rang last, again after seconds (optional, default 10 minutes).'
+"clock.time" = '{"type":"clock.time"}   says the time.'
+"clock.date" = '{"type":"clock.date"}   says the date of today.'
+"stopwatch.start" = '{"type":"stopwatch.start"}   starts the stopwatch.'
+"stopwatch.stop" = '{"type":"stopwatch.stop"}   stops the stopwatch.'
+"stopwatch.reset" = '{"type":"stopwatch.reset"}   resets the stopwatch.'
+"stopwatch.show" = '{"type":"stopwatch.show"}   says the stopwatch time.'
+"convert.units" = '{"type":"convert.units","value":5,"from":"miles","to":"kilometers"}   units as words in the language of the user.'
+"search.web" = '{"type":"search.web","query":"pumpkin soup recipe"}   opens a web search in the browser; only when the user wants to search, not for knowledge questions.'
+"music.playing" = '{"type":"music.playing"}   says what is playing.'
+"notification.read" = '{"type":"notification.read","from":"WhatsApp"}   reads notifications out; from optional (app or name).'
+"notification.reply" = '{"type":"notification.reply","message":"Be there in ten minutes","from":"Anna"}   answers a notification; Iris asks before sending.'
+"music.control" = '{"type":"music.control","action":"play","query":"Queen"}   action: play, pause, next, previous; query only with play, optional.'
+"app.open" = '{"type":"app.open","app":"Spotify"}   opens an app.'
+"navigation.start" = '{"type":"navigation.start","place":"Cologne central station"}   shows a place in the maps app.'
+"call.start" = '{"type":"call.start","contact":"Mom"}   calls a contact; Iris asks which number when there are several.'
+"weather.show" = '{"type":"weather.show","date":"2026-11-19","place":"Cologne"}   weather; date and place optional (default today, default place).'
+"calendar.show" = '{"type":"calendar.show","date":"2026-11-19","days":1}   reads calendar appointments out; date optional (today), days optional.'
+"day.overview" = '{"type":"day.overview","tomorrow":false}   overview of the day (weather, appointments); tomorrow optional.'
+"battery.show" = '{"type":"battery.show"}   says the battery level.'
+"calculator.compute" = '{"type":"calculator.compute","expression":"12 * (3 + 4)"}   calculates; digits and + - * / ^ ( ) . , % only.'
+"joke.tell" = '{"type":"joke.tell"}   tells a joke.'
+
+[tools]
+# which words of a request call for the tools of a family (several families may match: a mixed order gets all)
+timer = '(?iu)\b(timers?|stopwatch|countdown|cancel|pause|extend)\b'
+alarm = '(?iu)\b(alarm|wake|wake-?up|get up)\b'
+reminder = '(?iu)\b(remind\w*|do not forget|don.t forget|postpone|reschedule|snooze|again)\b'
+list = '(?iu)\b(lists?|shopping|grocery|groceries|tick|check off|cross off)\b'
+note = '(?iu)\b(notes?|write down|jot)\b'
+device = '(?iu)\b(louder|quieter|volume|brighter|dimmer|brightness|mute|vibrat\w*|silent|do not disturb|ringtone)\b'
+task = '(?iu)\b(tasks?|to-?do|todo)\b'
+calendar = '(?iu)\b(calendar|appointment|meeting|event)\b'
+flashlight = '(?iu)\b(flashlight|torch|light|lamp)\b'
+clock = '(?iu)\b(what time|the time|the date|what day|what date)\b'
+stopwatch = '(?iu)\b(stopwatch)\b'
+convert = '(?iu)\b(convert\w*|in kilometers|in miles|in celsius|in fahrenheit|how many)\b'
+search = '(?iu)\b(search\w*|google|web search|look up online)\b'
+music = '(?iu)\b(music|song|play\w*|next (?:song|track)|pause|what is playing)\b'
+notification = '(?iu)\b(notifications?|messages?|whatsapp|signal|telegram|repl(?:y|ies))\b'
+app = '(?iu)\b(open\w*|launch\w*|start\w*|app)\b'
+navigation = '(?iu)\b(navigat\w*|directions?|route|take me|how do i get|map)\b'
+call = '(?iu)\b(call\w*|phone\w*|ring\w*|dial\w*)\b'
+weather = '(?iu)\b(weather|rain\w*|temperature|sunny|snow\w*|jacket|umbrella)\b'
+day = '(?iu)\b(overview|what is on today|what is on tomorrow|my day)\b'
+battery = '(?iu)\b(battery|charge level)\b'
+calculator = '(?iu)\b(calculate\w*|what is \d|times|divided|plus|minus)\b'
+joke = '(?iu)\b(jokes?)\b'

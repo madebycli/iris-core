@@ -3,6 +3,7 @@
 //! A bare hour is taken as said ("um fünf" is 5:00): the user who asks a clock for an alarm at
 //! five means the next five on a 24-hour dial, and the reply names the time in full.
 
+use iris_core::actions::Args;
 use iris_core::time::{describe, resolve, scan, HalfDay, Repeat, TimeError, TimeExpr};
 use iris_core::{AlarmRequest, Cx, HostError, Reply, Skill};
 use serde_json::json;
@@ -22,25 +23,50 @@ impl Skill for Alarm {
         }
     }
 
+    fn act(&self, action: &str, args: &Args, cx: &mut Cx) -> Option<Reply> {
+        Some(match action {
+            "alarm.set" => {
+                let (hour, minute) = args.text("time").and_then(|t| t.split_once(':')).and_then(|(h, m)| Some((h.parse::<u8>().ok()?, m.parse::<u8>().ok()?)))?;
+                // with a date the plan resolved the moment; without one it is the next time the clock shows it
+                let at = match args.at_ms() {
+                    Some(ms) => jiff::Timestamp::from_millisecond(ms).ok()?,
+                    None => next_time(&cx.now, hour, minute)?,
+                };
+                let z = at.to_zoned(cx.now.time_zone().clone());
+                let days: Vec<u8> = match args.text("repeat") {
+                    Some("daily") => (1..=7).collect(),
+                    Some("weekdays") => (1..=5).collect(),
+                    Some("weekly") => vec![z.weekday().to_monday_one_offset() as u8],
+                    _ => Vec::new(),
+                };
+                let request = AlarmRequest { at_ms: at.as_millisecond(), hour, minute, days: days.clone() };
+                let when = if days.is_empty() {
+                    describe(at, &cx.now, cx.lang, false)
+                } else {
+                    let time = cx.lang.format.clock.replace("{h}", &hour.to_string()).replace("{mm}", &format!("{minute:02}"));
+                    let repeat = cx.msg(match args.text("repeat") { Some("daily") => "repeat.daily", Some("weekdays") => "repeat.weekdays", _ => "repeat.weekly" }, &[]);
+                    cx.msg("repeating_when", &[("repeat", &repeat), ("time", &time)])
+                };
+                send(cx, &request, &when)
+            }
+            "alarm.next" => next(cx),
+            "alarm.show" => show(cx),
+            "alarm.dismiss" => {
+                let at = args.text("time").and_then(|t| t.split_once(':')).and_then(|(h, m)| Some((h.parse::<u8>().ok()?, m.parse::<u8>().ok()?)));
+                ask_dismiss(cx, at)
+            }
+            _ => return None,
+        })
+    }
+
     fn handle(&self, intent: &str, cx: &mut Cx) -> Option<Reply> {
         match intent {
             "set" | "set.time" => Some(set(cx)),
-            "next" => Some(match cx.host.next_alarm().and_then(|ms| jiff::Timestamp::from_millisecond(ms).ok()) {
-                Some(at) => Reply::done(cx.msg("next", &[("when", &describe(at, &cx.now, cx.lang, false))])),
-                None => Reply::done(cx.msg("none", &[])),
-            }),
+            "next" => Some(next(cx)),
             "dismiss" | "delete" => {
                 // a time names the alarm ("Lösche den Wecker für 15 Uhr"); without one it is the next alarm
                 let expr = scan(&cx.utt.norms(), cx.lang).expr;
-                let at = expr.clock.map(|c| (c.hour, c.minute));
-                cx.ask("dismiss.confirm", json!({ "hour": at.map(|a| a.0), "minute": at.map(|a| a.1) }));
-                Some(Reply::question(match at {
-                    Some((h, m)) => {
-                        let time = cx.lang.format.clock.replace("{h}", &h.to_string()).replace("{mm}", &format!("{m:02}"));
-                        cx.msg("dismiss_ask_at", &[("time", &time)])
-                    }
-                    None => cx.msg("dismiss_ask", &[]),
-                }))
+                Some(ask_dismiss(cx, expr.clock.map(|c| (c.hour, c.minute))))
             }
             // neither yes nor no: a new request, the question is dropped
             "dismiss.confirm" if cx.lang.dialog.is_no(&cx.utt.norm) => Some(Reply::done(cx.lang.messages.get("cancelled", &[]))),
@@ -49,18 +75,54 @@ impl Skill for Alarm {
                 let hour = cx.state["hour"].as_u64().map(|h| h as u8);
                 let minute = cx.state["minute"].as_u64().map(|m| m as u8).or(hour.map(|_| 0));
                 Some(match cx.host.device(&iris_core::DeviceAction::DismissAlarm { hour, minute }) {
-                    Ok(_) if hour.is_some() => Reply::done(cx.msg("dismissed_at", &[])),
-                    Ok(_) => Reply::done(cx.msg("dismissed", &[])),
+                    Ok(_) if hour.is_some() => {
+                        cx.proceed();
+                        Reply::done(cx.msg("dismissed_at", &[]))
+                    }
+                    Ok(_) => {
+                        cx.proceed();
+                        Reply::done(cx.msg("dismissed", &[]))
+                    }
                     Err(_) => Reply::failed(cx.msg("no_clock", &[])),
                 })
             }
-            "list" => Some(match cx.host.show_alarms() {
-                Ok(()) => Reply::done(cx.msg("list_opened", &[])),
-                Err(_) => Reply::failed(cx.msg("no_clock", &[])),
-            }),
+            "list" => Some(show(cx)),
             _ => None,
         }
     }
+}
+
+/// The next moment the clock shows `hour:minute`: today when it is still ahead, otherwise tomorrow.
+fn next_time(now: &jiff::Zoned, hour: u8, minute: u8) -> Option<jiff::Timestamp> {
+    let today = now.date().at(hour as i8, minute as i8, 0, 0).to_zoned(now.time_zone().clone()).ok()?;
+    let at = if today.timestamp() > now.timestamp() { today } else { now.date().tomorrow().ok()?.at(hour as i8, minute as i8, 0, 0).to_zoned(now.time_zone().clone()).ok()? };
+    Some(at.timestamp())
+}
+
+fn next(cx: &mut Cx) -> Reply {
+    match cx.host.next_alarm().and_then(|ms| jiff::Timestamp::from_millisecond(ms).ok()) {
+        Some(at) => Reply::done(cx.msg("next", &[("when", &describe(at, &cx.now, cx.lang, false))])),
+        None => Reply::done(cx.msg("none", &[])),
+    }
+}
+
+fn show(cx: &mut Cx) -> Reply {
+    match cx.host.show_alarms() {
+        Ok(()) => Reply::done(cx.msg("list_opened", &[])),
+        Err(_) => Reply::failed(cx.msg("no_clock", &[])),
+    }
+}
+
+/// Asks before an alarm is dismissed: the question of the alarm skill applies to every way of asking.
+fn ask_dismiss(cx: &mut Cx, at: Option<(u8, u8)>) -> Reply {
+    cx.ask("dismiss.confirm", json!({ "hour": at.map(|a| a.0), "minute": at.map(|a| a.1) }));
+    Reply::question(match at {
+        Some((h, m)) => {
+            let time = cx.lang.format.clock.replace("{h}", &h.to_string()).replace("{mm}", &format!("{m:02}"));
+            cx.msg("dismiss_ask_at", &[("time", &time)])
+        }
+        None => cx.msg("dismiss_ask", &[]),
+    })
 }
 
 fn set(cx: &mut Cx) -> Reply {
@@ -94,9 +156,14 @@ fn set(cx: &mut Cx) -> Reply {
         };
         cx.msg("repeating_when", &[("repeat", &repeat), ("time", &time)])
     };
-    match cx.host.set_alarm(&request) {
-        Ok(true) => Reply::done(cx.msg("set", &[("when", &when)])),
-        Ok(false) => Reply::done(cx.msg("handed_over", &[("when", &when)])),
+    send(cx, &request, &when)
+}
+
+/// Hands the alarm to the clock app and says what is known: set (confirmed), handed over (no receipt) or not possible.
+fn send(cx: &mut Cx, request: &AlarmRequest, when: &str) -> Reply {
+    match cx.host.set_alarm(request) {
+        Ok(true) => Reply::done(cx.msg("set", &[("when", when)])),
+        Ok(false) => Reply::done(cx.msg("handed_over", &[("when", when)])),
         Err(HostError::Unavailable) | Err(HostError::Denied) => Reply::failed(cx.msg("no_clock", &[])),
         Err(HostError::Failed(_)) => Reply::failed(cx.msg("no_clock", &[])),
     }

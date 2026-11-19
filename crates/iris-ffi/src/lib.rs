@@ -26,6 +26,11 @@ pub trait Phone: Send + Sync {
     fn schedule(&self, entry: String) -> bool;
     fn unschedule(&self, id: String);
 
+    /// Whether the phone can do what a capability stands for right now: `schedule`, `tasks`, `calendar`, `alarm`, `device`,
+    /// `notifications`, `http`, `location`. The planner leaves out the actions the phone cannot carry out.
+    fn has_capability(&self, name: String) -> bool;
+
+
     /// The lists of the user's task app as JSON `[{"id","name"}]`; `None` when there is no such app.
     fn task_lists(&self) -> Option<String>;
     /// Creates a task (JSON of an external task). Returns the name of the list it went to.
@@ -72,8 +77,9 @@ impl Host for Bridge {
     fn zone(&self) -> String {
         self.0.zone()
     }
-    fn has(&self, _capability: Capability) -> bool {
-        true
+    fn has(&self, capability: Capability) -> bool {
+        let name = serde_json::to_value(capability).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default();
+        self.0.has_capability(name)
     }
     fn setting(&self, key: &str) -> Option<String> {
         self.0.setting(key.to_string())
@@ -241,6 +247,8 @@ struct UnderstandingJson<'a> {
 pub struct IrisCore {
     engine: Mutex<Engine>,
     brain: Arc<BrainSlot>,
+    /// The clock of the planning turn in progress: taken when the planner prompt is made, used to check its answer.
+    turn: Mutex<Option<Turn>>,
 }
 
 #[uniffi::export]
@@ -251,7 +259,7 @@ impl IrisCore {
         let mut engine = iris_skills::engine(Arc::new(Bridge(phone.clone())), Arc::new(Bridge(phone))).expect("built-in skills are valid");
         let brain = Arc::new(BrainSlot::default());
         engine.set_classifier(Box::new(BrainClassifier(brain.clone())));
-        Arc::new(Self { engine: Mutex::new(engine), brain })
+        Arc::new(Self { engine: Mutex::new(engine), brain, turn: Mutex::new(None) })
     }
 
     /// Where the network is: a directory with `brain.onnx`, `meta.txt` and `pieces.tsv`, and the ONNX
@@ -309,6 +317,89 @@ impl IrisCore {
         serde_json::to_string(&reply).unwrap_or_default()
     }
 
+    /// Runs the actions of an accepted plan: `actions` is the `actions` array `plan_validate` returned. Core actions run
+    /// here, with their checked values. The reply (same JSON as `process`) stops the run where it must: a question of
+    /// the core (the rest waits for the answer: a "yes" goes on once, anything else drops it), a step only the app can
+    /// do (`host`: `{"action","args"}`; the rest waits for `plan_continue`), or the first action that did not work
+    /// (`left` counts the steps that did not run). Nothing is carried out twice.
+    pub fn plan_run(&self, actions: String, lang: String) -> String {
+        let Ok(serde_json::Value::Array(list)) = serde_json::from_str::<serde_json::Value>(&actions) else {
+            return serde_json::to_string(&iris_core::Reply::new(iris_core::ReplyKind::Unhandled, "")).unwrap_or_default();
+        };
+        let steps: Vec<(String, serde_json::Map<String, serde_json::Value>)> = list
+            .into_iter()
+            .filter_map(|a| Some((a.get("id")?.as_str()?.to_string(), a.get("args")?.as_object()?.clone())))
+            .collect();
+        let reply = self.engine.lock().unwrap().plan_run(steps, &lang);
+        serde_json::to_string(&reply).unwrap_or_default()
+    }
+
+    /// The app reports how the step it was given went (`ok`): the plan goes on, or the rest is dropped. Same reply JSON.
+    pub fn plan_continue(&self, ok: bool, lang: String) -> String {
+        serde_json::to_string(&self.engine.lock().unwrap().plan_continue(ok, &lang)).unwrap_or_default()
+    }
+
+    /// The app asked its own question for the step it was given (which contact, which app): the rest waits for the
+    /// answer, which the app reports with `plan_continue`, or drops with `plan_drop`.
+    pub fn plan_wait(&self) {
+        self.engine.lock().unwrap().plan_wait();
+    }
+
+    /// The app's question ended without an usable answer, or the user turned to something else: the waiting steps are
+    /// dropped. Returns how many.
+    pub fn plan_drop(&self) -> u32 {
+        self.engine.lock().unwrap().plan_drop() as u32
+    }
+
+    /// Where a sentence goes at AI-use `level` (1 sparing .. 4 AI first): "local", "talk" (the assistant answers in
+    /// text) or "plan" (the assistant proposes actions, see `plan_prompt` and `plan_validate`). An answer to an
+    /// open question of the core, and one plain command the local network is sure of ("Taschenlampe an"), are
+    /// "local" at every level.
+    pub fn route(&self, level: u8, text: String, lang: String) -> String {
+        let (open, direct) = {
+            let engine = self.engine.lock().unwrap();
+            (engine.has_question(), engine.direct(&text, &lang))
+        };
+        match iris_core::plan::route(level, &text, &lang, open, direct) {
+            iris_core::plan::Route::Local => "local",
+            iris_core::plan::Route::Talk => "talk",
+            iris_core::plan::Route::Plan => "plan",
+        }
+        .to_string()
+    }
+
+    /// What the assistant is told to plan actions for `request`: the contract for the tools this request needs and this
+    /// phone can carry out, and this turn's clock. The clock and the tools are kept, so `plan_validate` checks the answer
+    /// against the same instant and the same offer. `None` for a language the planner has no words for, or when the
+    /// phone can carry out none of the actions.
+    pub fn plan_prompt(&self, lang: String, request: String) -> Option<String> {
+        let (clock, available) = {
+            let engine = self.engine.lock().unwrap();
+            (engine.turn_clock(), engine.available_actions())
+        };
+        let prompt = iris_core::plan::prompt(&lang, clock.0, &clock.1, &request, &available);
+        *self.turn.lock().unwrap() = prompt.as_ref().map(|p| Turn { now_ms: clock.0, zone: clock.1.clone(), tools: p.tools.clone() });
+        prompt.map(|p| p.text)
+    }
+
+    /// Checks the assistant's whole reply against the contract, the turn's clock and the tools that were offered.
+    /// JSON: `{"kind":"actions","actions":[{"id","args"}]}`, `{"kind":"ask","slot","question"}`,
+    /// `{"kind":"not_action"}` or `{"kind":"rejected","reason"}`. Nothing is carried out here: the host hands each
+    /// action to `execute_action`.
+    pub fn plan_validate(&self, raw: String, lang: String) -> String {
+        let host_clock = self.engine.lock().unwrap().turn_clock();
+        let kept = self.turn.lock().unwrap().take();
+        let tools = kept.as_ref().map(|t| t.tools.clone()).unwrap_or_default();
+        let (now_ms, zone) = turn_for_validation(kept.map(|t| (t.now_ms, t.zone)), host_clock);
+        serde_json::to_string(&iris_core::plan::validate(&raw, &lang, now_ms, &zone, &tools)).unwrap_or_default()
+    }
+
+    /// The user dismissed the question the core waits on: it is dropped, and only it. Entries that exist stay.
+    /// Returns whether a question was open.
+    pub fn cancel_question(&self) -> bool {
+        self.engine.lock().unwrap().cancel_question()
+    }
+
     /// Whether a skill is waiting for an answer: the microphone should open again.
     pub fn awaits_answer(&self) -> bool {
         self.engine.lock().unwrap().has_question()
@@ -332,5 +423,45 @@ impl IrisCore {
 
     pub fn languages(&self) -> Vec<String> {
         self.engine.lock().unwrap().languages()
+    }
+}
+
+/// How long the clock of a planning turn is kept: an answer that takes longer than this is checked against the
+/// current time instead.
+/// What the planner was told for one request: the clock it was given and the tools on offer.
+struct Turn {
+    now_ms: i64,
+    zone: String,
+    tools: Vec<String>,
+}
+
+const TURN_CLOCK_TTL_MS: i64 = 10 * 60_000;
+
+/// The clock to check an answer against: the one the prompt was made with (one clock per turn), unless there was
+/// none, it is older than [`TURN_CLOCK_TTL_MS`], or the phone's clock went backwards.
+fn turn_for_validation(kept: Option<(i64, String)>, host: (i64, String)) -> (i64, String) {
+    match kept {
+        Some((at, zone)) if host.0 >= at && host.0 - at <= TURN_CLOCK_TTL_MS => (at, zone),
+        _ => host,
+    }
+}
+
+#[cfg(test)]
+mod turn_clock_tests {
+    use super::turn_for_validation;
+
+    #[test]
+    fn the_prompts_clock_is_the_one_the_answer_is_checked_with() {
+        let kept = Some((1_000_000, "Europe/Berlin".to_string()));
+        assert_eq!(turn_for_validation(kept, (1_020_000, "Europe/Berlin".into())), (1_000_000, "Europe/Berlin".into()));
+    }
+
+    #[test]
+    fn without_a_kept_clock_or_when_it_is_stale_the_current_time_is_used() {
+        let host = (50_000_000, "Europe/Berlin".to_string());
+        assert_eq!(turn_for_validation(None, host.clone()), host);
+        assert_eq!(turn_for_validation(Some((1_000, "UTC".into())), host.clone()), host);
+        // a clock that went backwards
+        assert_eq!(turn_for_validation(Some((60_000_000, "UTC".into())), host.clone()), host);
     }
 }

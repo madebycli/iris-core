@@ -111,3 +111,24 @@ pub(crate) fn named<'a>(items: &'a [iris_core::Entry], said: &str) -> Option<&'a
     let one = top.next()?;
     top.next().is_none().then_some(one)
 }
+
+/// Why a typed action did not find its entry.
+pub(crate) enum Miss {
+    /// No entry has that title.
+    None,
+    /// Several entries fit: nothing is changed.
+    Several,
+}
+
+/// The entry an action names by title: the one whose title is exactly `title` (any case), otherwise the only one that
+/// contains it or is contained in it. A title that fits several entries is `Several`: a typed action never guesses.
+pub(crate) fn by_title<'a>(items: &'a [iris_core::Entry], title: &str) -> Result<&'a iris_core::Entry, Miss> {
+    let want = title.trim().to_lowercase();
+    let exact: Vec<&iris_core::Entry> = items.iter().filter(|e| e.title.trim().to_lowercase() == want).collect();
+    let pool: Vec<&iris_core::Entry> = if exact.is_empty() { items.iter().filter(|e| !want.is_empty() && e.title.to_lowercase().contains(&want)).collect() } else { exact };
+    match pool.as_slice() {
+        [] => Err(Miss::None),
+        [one] => Ok(one),
+        _ => Err(Miss::Several),
+    }
+}

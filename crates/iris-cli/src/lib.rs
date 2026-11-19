@@ -43,6 +43,8 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Default)]
 pub struct FakeState {
+    /// The calendar cannot be written.
+    pub calendar_down: bool,
     pub now_ms: i64,
     pub zone: String,
     pub settings: HashMap<String, String>,
@@ -79,8 +81,9 @@ impl Host for FakeHost {
     fn zone(&self) -> String {
         self.0.lock().unwrap().zone.clone()
     }
-    fn has(&self, _capability: Capability) -> bool {
-        true
+    fn has(&self, capability: Capability) -> bool {
+        // without a clock app there is no alarm capability
+        !(capability == Capability::Alarm && self.0.lock().unwrap().clock_missing)
     }
     fn setting(&self, key: &str) -> Option<String> {
         self.0.lock().unwrap().settings.get(key).cloned()
@@ -173,6 +176,9 @@ impl Host for FakeHost {
         Ok(list)
     }
     fn create_event(&self, event: &ExternalEvent) -> Result<String, HostError> {
+        if self.0.lock().unwrap().calendar_down {
+            return Err(HostError::Unavailable);
+        }
         self.0.lock().unwrap().events.push(event.clone());
         Ok("Calendar".into())
     }

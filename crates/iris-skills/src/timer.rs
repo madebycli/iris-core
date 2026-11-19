@@ -1,6 +1,7 @@
 //! Timers: set, ask how long is left, cancel. Several can run at once, each with a name.
 
 use iris_core::time::{describe, describe_duration, resolve, scan, scan_duration, HalfDay};
+use iris_core::actions::Args;
 use iris_core::{Card, Cx, Entry, EntryKind, Reply, Skill};
 use serde_json::json;
 
@@ -17,6 +18,25 @@ impl Skill for Timer {
             "en" => Some(include_str!("../data/timer/en.toml")),
             _ => None,
         }
+    }
+
+    fn act(&self, action: &str, args: &Args, cx: &mut Cx) -> Option<Reply> {
+        let label = args.text("label").map(str::to_string);
+        let secs = args.int("seconds");
+        Some(match action {
+            "timer.set" => start(cx, secs?, label.map(|l| iris_core::text::capitalise(&l)).unwrap_or_default(), None),
+            "timer.show" => show(cx, running(cx).into_iter().filter(|t| label.as_deref().is_none_or(|l| same_name(&t.title, l))).collect()),
+            "timer.cancel" => match chosen(cx, label.as_deref(), args.flag("all").unwrap_or(false)) {
+                Ok(targets) => remove(cx, targets),
+                Err(reply) => *reply,
+            },
+            "timer.pause" | "timer.resume" | "timer.extend" => match chosen(cx, label.as_deref(), false) {
+                Ok(targets) if targets.len() == 1 => apply(cx, targets[0].clone(), &action["timer.".len()..], secs),
+                Ok(_) => Reply::failed(cx.lang.messages.get("action_unclear", &[])),
+                Err(reply) => *reply,
+            },
+            _ => return None,
+        })
     }
 
     fn handle(&self, intent: &str, cx: &mut Cx) -> Option<Reply> {
@@ -151,6 +171,14 @@ fn query(cx: &mut Cx) -> Reply {
     if !named.is_empty() {
         timers = named;
     }
+    show(cx, timers)
+}
+
+/// What is left of the running timers `timers`, said and as a card.
+fn show(cx: &mut Cx, timers: Vec<Entry>) -> Reply {
+    if timers.is_empty() {
+        return Reply::done(cx.msg("none", &[]));
+    }
     let now = cx.now_ms();
     let lines: Vec<String> = timers
         .iter()
@@ -184,6 +212,12 @@ fn cancel(cx: &mut Cx, answering: bool) -> Reply {
         cx.ask("cancel.which", json!({}));
         return Reply::question(cx.msg("which", &[("names", &names)]));
     };
+    let targets: Vec<Entry> = targets.into_iter().cloned().collect();
+    remove(cx, targets)
+}
+
+/// Cancels `targets` and says so.
+fn remove(cx: &mut Cx, targets: Vec<Entry>) -> Reply {
     for t in &targets {
         cx.host.unschedule(&t.id);
         cx.store.delete(&t.id);
@@ -194,6 +228,30 @@ fn cancel(cx: &mut Cx, answering: bool) -> Reply {
             None => Reply::done(cx.msg("cancelled", &[])),
         },
         many => Reply::done(cx.messages.plural("cancelled_all", many.len() as i64, &[])),
+    }
+}
+
+fn same_name(title: &str, label: &str) -> bool {
+    title.trim().to_lowercase() == label.trim().to_lowercase()
+}
+
+/// The running timers an action means: all of them, the one named `label`, or the only one. Several without a name
+/// are unclear: nothing happens and the user is told so.
+fn chosen(cx: &Cx, label: Option<&str>, all: bool) -> Result<Vec<Entry>, Box<Reply>> {
+    let timers = running(cx);
+    if timers.is_empty() {
+        return Err(Box::new(Reply::done(cx.msg("none", &[]))));
+    }
+    if all {
+        return Ok(timers);
+    }
+    match label {
+        Some(l) => {
+            let named: Vec<Entry> = timers.into_iter().filter(|t| same_name(&t.title, l)).collect();
+            if named.is_empty() { Err(Box::new(Reply::failed(cx.msg("not_found", &[])))) } else { Ok(named) }
+        }
+        None if timers.len() == 1 => Ok(timers),
+        None => Err(Box::new(Reply::failed(cx.lang.messages.get("action_unclear", &[])))),
     }
 }
 
@@ -215,6 +273,12 @@ fn control(cx: &mut Cx, action: &str, answering: bool) -> Reply {
             return Reply::question(cx.msg("which_control", &[("names", &names)]));
         }
     };
+    let extra = if action == "extend" { scan_duration(&cx.utt.norms(), cx.lang).map(|(s, _)| s) } else { None };
+    apply(cx, target, action, extra)
+}
+
+/// Pauses, resumes, extends (by `extra` seconds) or restarts `target` and says so.
+fn apply(cx: &mut Cx, target: Entry, action: &str, extra: Option<i64>) -> Reply {
     let now = cx.now_ms();
     let mut entry = target;
     let paused = entry.remaining_ms > 0;
@@ -231,7 +295,7 @@ fn control(cx: &mut Cx, action: &str, answering: bool) -> Reply {
             "resumed"
         }
         "extend" => {
-            let Some((secs, _)) = scan_duration(&cx.utt.norms(), cx.lang) else {
+            let Some(secs) = extra else {
                 return Reply::failed(cx.msg("ask_more", &[]));
             };
             if paused {
@@ -253,7 +317,7 @@ fn control(cx: &mut Cx, action: &str, answering: bool) -> Reply {
         cx.host.unschedule(&entry.id);
         let _ = cx.host.schedule(&entry);
     }
-    let more = scan_duration(&cx.utt.norms(), cx.lang).map(|(s, _)| describe_duration(s, cx.lang)).unwrap_or_default();
+    let more = extra.map(|s| describe_duration(s, cx.lang)).unwrap_or_default();
     let left = describe_duration((entry.left_ms(now) + 999) / 1000, cx.lang);
     let duration = describe_duration(entry.duration_ms / 1000, cx.lang);
     let name = entry.title.clone();

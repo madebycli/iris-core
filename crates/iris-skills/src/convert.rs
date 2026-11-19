@@ -45,6 +45,17 @@ impl Skill for Convert {
         }
     }
 
+    fn act(&self, action: &str, args: &iris_core::actions::Args, cx: &mut Cx) -> Option<Reply> {
+        if action != "convert.units" {
+            return None;
+        }
+        // the units are the words of the user's language, as in a spoken request ("Meilen", "Kilometer")
+        Some(match converted(cx, args.number("value")?, &args.text("from")?.to_lowercase(), &args.text("to")?.to_lowercase()) {
+            Some(reply) => reply,
+            None => Reply::failed(cx.lang.messages.get("action_unclear", &[])),
+        })
+    }
+
     fn handle(&self, intent: &str, cx: &mut Cx) -> Option<Reply> {
         if intent != "convert" {
             return None;
@@ -52,13 +63,20 @@ impl Skill for Convert {
         let value = number(cx)?;
         let from_said = unit_words(cx, "from");
         let to_said = unit_words(cx, "to");
-        let from = cx.table("units", &from_said)?.to_string();
-        let to = cx.table("units", &to_said)?.to_string();
+        converted(cx, value, &from_said, &to_said)
+    }
+}
+
+/// `value` from the unit said as `from_said` to the one said as `to_said`; `None` when a unit is not known.
+fn converted(cx: &mut Cx, value: f64, from_said: &str, to_said: &str) -> Option<Reply> {
+    {
+        let from = cx.table("units", from_said)?.to_string();
+        let to = cx.table("units", to_said)?.to_string();
         let Some(result) = convert(value, &from, &to) else {
             return Some(Reply::failed(cx.msg("incompatible", &[])));
         };
-        let shown_from = cx.table("names", &from).unwrap_or(&from_said).to_string();
-        let shown_to = cx.table("names", &to).unwrap_or(&to_said).to_string();
+        let shown_from = cx.table("names", &from).unwrap_or(from_said).to_string();
+        let shown_to = cx.table("names", &to).unwrap_or(to_said).to_string();
         let sep = cx.msg("decimal", &[]);
         Some(Reply::done(cx.msg("result", &[("value", &format_number(value, &sep)), ("from", &shown_from), ("result", &format_number(result, &sep)), ("to", &shown_to)])))
     }

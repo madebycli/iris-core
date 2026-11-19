@@ -23,6 +23,20 @@ pub enum Capability {
     Device,
     /// Reading notifications of other apps and answering them.
     Notifications,
+    /// The camera's torch.
+    Flashlight,
+    /// The contacts, to call someone.
+    Contacts,
+    /// A maps app that takes a destination.
+    Maps,
+    /// Controlling the media player and asking what plays.
+    Media,
+    /// Launching other apps.
+    Apps,
+    /// Weather data the user has set up.
+    Weather,
+    /// Reading the device calendar.
+    CalendarRead,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

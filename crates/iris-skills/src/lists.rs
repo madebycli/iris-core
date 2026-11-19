@@ -5,6 +5,7 @@
 //! Käse" and "lösche Milch" need no name.
 
 use crate::{join, strip};
+use iris_core::actions::Args;
 use iris_core::text::capitalise;
 use iris_core::{Card, Cx, Entry, EntryKind, Reply, Skill};
 use serde_json::json;
@@ -24,6 +25,19 @@ impl Skill for Lists {
             "en" => Some(include_str!("../data/lists/en.toml")),
             _ => None,
         }
+    }
+
+    fn act(&self, action: &str, args: &Args, cx: &mut Cx) -> Option<Reply> {
+        let list = args.text("list").map(|l| canonical(cx, &l.to_lowercase()));
+        Some(match action {
+            "list.add" => add_items(cx, Some(list?), false, args.texts("items")),
+            "list.check_all" => check_all(cx, &list?),
+            "list.check_common" => check_common(cx, &list?, &canonical(cx, &args.text("other")?.to_lowercase())),
+            "list.show" => show(cx, list.or_else(|| cx.recall("list", RECENT_MS)).or_else(|| collections(cx).into_iter().next())),
+            "list.check" => mark_item(cx, list, args.text("item")?, true),
+            "list.remove" => mark_item(cx, list, args.text("item")?, false),
+            _ => return None,
+        })
     }
 
     fn handle(&self, intent: &str, cx: &mut Cx) -> Option<Reply> {
@@ -237,7 +251,13 @@ fn add_items(cx: &mut Cx, list: Option<String>, guided: bool, items: Vec<String>
 }
 
 fn read(cx: &mut Cx) -> Reply {
-    let Some(list) = named(cx).or_else(|| cx.recall("list", RECENT_MS)).or_else(|| collections(cx).into_iter().next()) else {
+    let list = named(cx).or_else(|| cx.recall("list", RECENT_MS)).or_else(|| collections(cx).into_iter().next());
+    show(cx, list)
+}
+
+/// Says what is open on `list` (none: there are no lists).
+fn show(cx: &mut Cx, list: Option<String>) -> Reply {
+    let Some(list) = list else {
         return Reply::done(cx.msg("no_lists", &[]));
     };
     cx.remember("list", &list);
@@ -279,6 +299,52 @@ fn mark(cx: &mut Cx, done: bool) -> Option<Reply> {
     cx.remember("list", &hits[0].collection.clone());
     let titles: Vec<String> = hits.iter().map(|e| e.title.clone()).collect();
     Some(Reply::done(cx.messages.plural(if done { "checked" } else { "removed" }, titles.len() as i64, &[("items", &spoken(cx, &titles))])))
+}
+
+/// Ticks off everything open on `list`.
+fn check_all(cx: &mut Cx, list: &str) -> Reply {
+    let items: Vec<Entry> = open(cx).into_iter().filter(|e| e.collection == list).collect();
+    if items.is_empty() {
+        return Reply::done(cx.msg("empty", &[("list", list)]));
+    }
+    for e in &items {
+        cx.store.put(Entry { pending: false, ..e.clone() });
+    }
+    cx.remember("list", list);
+    Reply::done(cx.msg("all_checked", &[("list", list)]))
+}
+
+/// Ticks off on `list` what is also open on `other`: decided here on the phone, so the assistant never needs to see either list.
+fn check_common(cx: &mut Cx, list: &str, other: &str) -> Reply {
+    let all = open(cx);
+    let on_other: Vec<String> = all.iter().filter(|e| e.collection == other).map(|e| e.title.to_lowercase()).collect();
+    let hits: Vec<Entry> = all.into_iter().filter(|e| e.collection == list && on_other.contains(&e.title.to_lowercase())).collect();
+    if hits.is_empty() {
+        return Reply::done(cx.msg("nothing_in_common", &[("list", list), ("other", other)]));
+    }
+    for e in &hits {
+        cx.store.put(Entry { pending: false, ..e.clone() });
+    }
+    cx.remember("list", list);
+    let titles: Vec<String> = hits.iter().map(|e| e.title.clone()).collect();
+    Reply::done(cx.messages.plural("checked", titles.len() as i64, &[("items", &spoken(cx, &titles))]))
+}
+
+/// Ticks off (`done`) or removes the one open entry named `item` (on `list` when given). Several that fit: nothing happens.
+fn mark_item(cx: &mut Cx, list: Option<String>, item: &str, done: bool) -> Reply {
+    let items: Vec<Entry> = open(cx).into_iter().filter(|e| list.as_ref().is_none_or(|l| *l == e.collection)).collect();
+    let entry = match crate::by_title(&items, item) {
+        Ok(entry) => entry.clone(),
+        Err(crate::Miss::None) => return Reply::failed(cx.msg("not_found", &[])),
+        Err(crate::Miss::Several) => return Reply::failed(cx.lang.messages.get("action_unclear", &[])),
+    };
+    if done {
+        cx.store.put(Entry { pending: false, ..entry.clone() });
+    } else {
+        cx.store.delete(&entry.id);
+    }
+    cx.remember("list", &entry.collection);
+    Reply::done(cx.messages.plural(if done { "checked" } else { "removed" }, 1, &[("items", &entry.title)]))
 }
 
 fn today_only(cx: &Cx) -> bool {

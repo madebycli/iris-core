@@ -84,6 +84,22 @@ struct Pending {
     at_ms: i64,
 }
 
+/// What a plan still has to do after a step that waits (a confirmation, a step of the app).
+struct PlanRest {
+    actions: std::collections::VecDeque<(String, serde_json::Map<String, serde_json::Value>)>,
+    hold: Hold,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Hold {
+    /// A question of the core is open; the answer decides.
+    CoreQuestion,
+    /// The app is carrying out a step and reports back.
+    HostStep,
+    /// The app asked its own question (which contact, which app); its answer decides.
+    HostQuestion,
+}
+
 pub struct Engine {
     langs: HashMap<String, Arc<LangPack>>,
     skills: Vec<Registered>,
@@ -91,6 +107,10 @@ pub struct Engine {
     store: Arc<dyn Store>,
     classifier: Box<dyn Classifier>,
     pending: Option<Pending>,
+    /// The validated actions of a plan that have not run yet, while the plan waits.
+    plan_rest: Option<PlanRest>,
+    /// Set by a skill when the step the user confirmed was carried out (`Cx::proceed`).
+    proceeded: bool,
     /// What the last change touched, as it was before, and when: "rückgängig" restores it.
     undo: Option<(i64, Journal, Vec<String>)>,
     /// The acts of the last turns (newest first), the last answer and the last request, for context and for "say that again".
@@ -111,7 +131,7 @@ pub struct Engine {
 impl Engine {
     pub fn new(host: Arc<dyn Host>, store: Arc<dyn Store>) -> Self {
         let langs = LangPack::builtin().into_iter().map(|p| (p.code.clone(), Arc::new(p))).collect();
-        Self { langs, skills: Vec::new(), host, store, classifier: Box::new(NoClassifier), pending: None, undo: None, history: Vec::new(), last_reply: None, last_request: None, last_turn_ms: 0, memory: HashMap::new(), ids: 0, cutoff: 0.60, question_ttl_ms: 120_000, undo_ttl_ms: 600_000 }
+        Self { langs, skills: Vec::new(), host, store, classifier: Box::new(NoClassifier), pending: None, plan_rest: None, proceeded: false, undo: None, history: Vec::new(), last_reply: None, last_request: None, last_turn_ms: 0, memory: HashMap::new(), ids: 0, cutoff: 0.60, question_ttl_ms: 120_000, undo_ttl_ms: 600_000 }
     }
 
     pub fn add_language(&mut self, pack: LangPack) {
@@ -126,8 +146,113 @@ impl Engine {
         self.store.as_ref()
     }
 
+    /// The turn's clock: the host's time in milliseconds and its IANA time zone. One clock per turn, so a planner prompt
+    /// and the validation of its answer resolve "tomorrow" against the same instant.
+    pub fn turn_clock(&self) -> (i64, String) {
+        (self.host.now_ms(), self.host.zone())
+    }
+
     pub fn has_question(&self) -> bool {
         self.pending.is_some()
+    }
+
+    /// The user dismissed the question the core was waiting on (a button, a swipe, a cancel in the app): it is dropped.
+    /// Only the question goes. Entries that exist (timers, reminders, lists) stay as they are, and nothing is created
+    /// from the half-finished request. Returns whether a question was open.
+    pub fn cancel_question(&mut self) -> bool {
+        let rest = self.plan_rest.take();
+        self.pending.take().is_some() || rest.is_some()
+    }
+
+    /// Runs the validated actions of an accepted plan in order. Core actions run here; the run stops at a question
+    /// (the rest waits for the answer: "yes" goes on, anything else drops it), at a step only the app can do (`host`
+    /// of the reply is set, the rest waits for `plan_continue`) and at the first action that does not work (the rest is
+    /// dropped and counted in `left`). Nothing is carried out twice.
+    pub fn plan_run(&mut self, actions: Vec<(String, serde_json::Map<String, serde_json::Value>)>, code: &str) -> Reply {
+        self.plan_rest = None;
+        self.run_plan(actions.into(), code, Vec::new(), None)
+    }
+
+    /// The app reports how the step it was given went. `ok`: the plan goes on; otherwise the rest is dropped.
+    pub fn plan_continue(&mut self, ok: bool, code: &str) -> Reply {
+        let Some(rest) = self.plan_rest.take().filter(|r| r.hold != Hold::CoreQuestion) else {
+            return Reply::new(ReplyKind::Done, "");
+        };
+        if !ok {
+            let left = rest.actions.len();
+            return self.plan_end(Vec::new(), None, ReplyKind::Failed, left, code);
+        }
+        self.run_plan(rest.actions, code, Vec::new(), None)
+    }
+
+    /// The app asked its own question for the step it was given: the rest waits for the answer (`plan_continue`).
+    pub fn plan_wait(&mut self) {
+        if let Some(rest) = self.plan_rest.as_mut() {
+            rest.hold = Hold::HostQuestion;
+        }
+    }
+
+    /// The app's question ended without a usable answer, or the user turned to something else: the rest is dropped.
+    /// Returns how many steps were dropped.
+    pub fn plan_drop(&mut self) -> usize {
+        self.plan_rest.take().map_or(0, |r| r.actions.len())
+    }
+
+    fn run_plan(&mut self, mut actions: std::collections::VecDeque<(String, serde_json::Map<String, serde_json::Value>)>, code: &str, mut said: Vec<String>, mut card: Option<crate::reply::Card>) -> Reply {
+        while let Some((id, args)) = actions.pop_front() {
+            let is_host = crate::actions::registry().get(&id).is_some_and(|a| a.skill().is_none());
+            if is_host {
+                let left = actions.len();
+                self.plan_rest = Some(PlanRest { actions, hold: Hold::HostStep });
+                let mut r = Reply::new(ReplyKind::Done, said.join("\n"));
+                r.card = card;
+                r.host = Some(crate::reply::HostCall { action: id, args });
+                r.left = left;
+                return r;
+            }
+            let reply = self.execute(&id, &args, code);
+            if !reply.text.is_empty() {
+                said.push(reply.text.clone());
+            }
+            if reply.card.is_some() {
+                card = reply.card.clone();
+            }
+            match reply.kind {
+                ReplyKind::Done => {}
+                ReplyKind::Question => {
+                    let left = actions.len();
+                    if left > 0 {
+                        self.plan_rest = Some(PlanRest { actions, hold: Hold::CoreQuestion });
+                    }
+                    let mut r = Reply::new(ReplyKind::Question, said.join("\n"));
+                    r.card = card;
+                    r.skill = reply.skill;
+                    r.intent = reply.intent;
+                    r.left = left;
+                    return r;
+                }
+                _ => {
+                    let left = actions.len();
+                    return self.plan_end(said, card, ReplyKind::Failed, left, code);
+                }
+            }
+        }
+        let mut r = Reply::new(ReplyKind::Done, said.join("\n"));
+        r.card = card;
+        r
+    }
+
+    /// The end of a plan that stopped early: what was said so far, and how many steps were not carried out.
+    fn plan_end(&self, mut said: Vec<String>, card: Option<crate::reply::Card>, kind: ReplyKind, left: usize, code: &str) -> Reply {
+        if left > 0 {
+            if let Some(lang) = self.langs.get(code).or_else(|| self.langs.get("en")) {
+                said.push(lang.messages.plural("plan_left", left as i64, &[]));
+            }
+        }
+        let mut r = Reply::new(kind, said.join("\n"));
+        r.card = card;
+        r.left = left;
+        r
     }
 
     /// Adds a skill. Its manifest and every language file are checked now, so a broken skill never reaches a user.
@@ -164,8 +289,81 @@ impl Engine {
 
     /// Answers one utterance said or typed in the language `code`.
     pub fn process(&mut self, text: &str, code: &str) -> Reply {
+        // a plan waiting for the answer to a question of the core: only a question that is still open keeps it
+        let held = match self.plan_rest.take() {
+            Some(r) if r.hold == Hold::CoreQuestion && self.pending.is_some() => Some(r),
+            Some(r) if r.hold != Hold::CoreQuestion => {
+                self.plan_rest = Some(r);
+                None
+            }
+            _ => None,
+        };
+        self.proceeded = false;
         let reply = self.answer(text, code);
         self.remember_turn(text, code, &reply);
+        let Some(rest) = held else { return reply };
+        if reply.kind == ReplyKind::Question && self.pending.is_some() {
+            // still asking (a missing value): the rest keeps waiting
+            self.plan_rest = Some(rest);
+            return reply;
+        }
+        if self.proceeded && reply.kind == ReplyKind::Done {
+            // the confirmed step happened exactly once: the rest of the plan goes on, once
+            let first = reply.clone();
+            let mut next = self.run_plan(rest.actions, code, vec![first.text.clone()], first.card.clone());
+            next.skill = first.skill;
+            next.intent = first.intent;
+            return next;
+        }
+        // "no", "let it be", an expired question, a failure, anything unclear: nothing waiting may start
+        reply
+    }
+
+    /// The actions of the plan contract the host can carry out now (`actions::registry`, intersected with `Host::has`).
+    pub fn available_actions(&self) -> Vec<&'static crate::actions::Action> {
+        crate::actions::registry().available(self.host.as_ref())
+    }
+
+    /// Whether the local network is sure `text` is one plain command it can carry out itself, so that no level of AI
+    /// use needs to ask an assistant (see `plan::route`).
+    pub fn direct(&self, text: &str, code: &str) -> bool {
+        let Some(lang) = self.langs.get(code) else { return false };
+        // a plain command is short and the network is very sure of it; a long, vague sentence that the network happens to
+        // read as a command ("show me what entries I have") is the assistant's to place
+        if text.split_whitespace().count() > crate::actions::DIRECT_MAX_WORDS {
+            return false;
+        }
+        let utt = Utterance::new(text, lang);
+        self.classifier.classify(&utt.raw, &lang.code).into_iter().next().is_some_and(|p| p.p >= self.cutoff.max(crate::actions::DIRECT_MIN_P) && crate::actions::registry().is_direct(&p.label))
+    }
+
+    /// Carries out one checked action of an accepted plan with the executor the registry names: a skill's `act` or
+    /// the host's `act`. Nothing is read again: the values are the ones the plan checked. While a question of the
+    /// core is open, nothing happens (`Unhandled`); the host asks again after the question is answered or dropped.
+    pub fn execute(&mut self, action: &str, args: &serde_json::Map<String, serde_json::Value>, code: &str) -> Reply {
+        let lang = self.langs.get(code).or_else(|| self.langs.get("en")).cloned();
+        let unhandled = |text: String| {
+            let mut r = Reply::new(ReplyKind::Unhandled, text);
+            r.skill = "core".into();
+            r
+        };
+        let Some(lang) = lang else { return unhandled(String::new()) };
+        let nothing = || unhandled(lang.messages.get("not_understood", &[]));
+        let Some(def) = crate::actions::registry().get(action) else { return nothing() };
+        if self.pending.is_some() || !def.need.iter().all(|c| self.host.has(*c)) {
+            return nothing();
+        }
+        let reply = match def.skill() {
+            Some(skill_id) => {
+                let Some(index) = self.skills.iter().position(|r| r.manifest.id == skill_id) else { return nothing() };
+                let empty = Utterance::new("", &lang);
+                self.run_with(index, action, &empty, Slots::default(), &lang, serde_json::Value::Null, |skill, cx| skill.act(action, &crate::actions::Args(args), cx))
+            }
+            // a step only the app can carry out is handed to it by `plan_run`, never run here
+            None => None,
+        };
+        let Some(reply) = reply else { return nothing() };
+        self.remember_turn(action, code, &reply);
         reply
     }
 
@@ -364,19 +562,30 @@ impl Engine {
     }
 
     fn run(&mut self, index: usize, intent: &str, utt: &Utterance, slots: Slots, lang: &LangPack, state: serde_json::Value) -> Option<Reply> {
+        self.run_with(index, intent, utt, slots, lang, state, |skill, cx| skill.handle(intent, cx))
+    }
+
+    /// Runs `call` against skill `index` with the context of one turn: the store is recorded for "undo", a question the
+    /// skill asks is parked, and the reply is stamped with the skill and `intent`.
+    #[allow(clippy::too_many_arguments)]
+    fn run_with(&mut self, index: usize, intent: &str, utt: &Utterance, slots: Slots, lang: &LangPack, state: serde_json::Value, call: impl FnOnce(&dyn Skill, &mut Cx) -> Option<Reply>) -> Option<Reply> {
         let reg = &self.skills[index];
         let loaded = reg.langs.get(&lang.code)?;
         let now_ms = self.host.now_ms();
         let tz = TimeZone::get(&self.host.zone()).unwrap_or(TimeZone::UTC);
         let now = Timestamp::from_millisecond(now_ms).unwrap_or(Timestamp::UNIX_EPOCH).to_zoned(tz);
         let recording = RecordingStore::new(self.store.as_ref());
-        let mut cx = Cx { utt, slots, lang, messages: &loaded.messages, words: &loaded.words, expressions: &loaded.expressions, rewrites: &loaded.rewrites, tables: &loaded.tables, memory: &mut self.memory, skill_id: &reg.manifest.id, host: self.host.as_ref(), store: &recording, now, state, ask: None, ids: &mut self.ids, restore: Vec::new() };
-        let handled = reg.skill.handle(intent, &mut cx);
+        let mut cx = Cx { utt, slots, lang, messages: &loaded.messages, words: &loaded.words, expressions: &loaded.expressions, rewrites: &loaded.rewrites, tables: &loaded.tables, memory: &mut self.memory, skill_id: &reg.manifest.id, host: self.host.as_ref(), store: &recording, now, state, ask: None, ids: &mut self.ids, restore: Vec::new(), proceed: false };
+        let handled = call(reg.skill.as_ref(), &mut cx);
+        let proceeded = cx.proceed;
         let asked = cx.ask.take();
         let restore = std::mem::take(&mut cx.restore);
         drop(cx);
         let journal = recording.into_journal();
         let mut reply = handled?;
+        if proceeded {
+            self.proceeded = true;
+        }
         reply.skill = reg.manifest.id.clone();
         reply.intent = intent.to_string();
         if !journal.is_empty() || !restore.is_empty() {

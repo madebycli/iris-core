@@ -17,6 +17,10 @@ impl Skill for Clock {
         }
     }
 
+    fn act(&self, action: &str, _args: &iris_core::actions::Args, cx: &mut Cx) -> Option<Reply> {
+        self.handle(action.strip_prefix("clock.")?, cx)
+    }
+
     fn handle(&self, intent: &str, cx: &mut Cx) -> Option<Reply> {
         let now = &cx.now;
         match intent {

@@ -21,6 +21,17 @@ impl Skill for Stopwatch {
         }
     }
 
+    fn act(&self, action: &str, _args: &iris_core::actions::Args, cx: &mut Cx) -> Option<Reply> {
+        let intent = match action {
+            "stopwatch.start" => "start",
+            "stopwatch.stop" => "stop",
+            "stopwatch.reset" => "reset",
+            "stopwatch.show" => "read",
+            _ => return None,
+        };
+        self.handle(intent, cx)
+    }
+
     fn handle(&self, intent: &str, cx: &mut Cx) -> Option<Reply> {
         let now = cx.now_ms();
         // a start in the future means the clock was set back: the stopwatch cannot know how long it ran

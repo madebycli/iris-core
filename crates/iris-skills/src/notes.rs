@@ -1,6 +1,7 @@
 //! Notes: write one down, read them back.
 
 use crate::{join, strip};
+use iris_core::actions::Args;
 use iris_core::{Card, Cx, Entry, EntryKind, Reply, Skill};
 use serde_json::json;
 
@@ -19,6 +20,26 @@ impl Skill for Notes {
         }
     }
 
+    fn act(&self, action: &str, args: &Args, cx: &mut Cx) -> Option<Reply> {
+        Some(match action {
+            "note.add" => save(cx, args.text("text")?.to_string()),
+            "note.show" => read(cx),
+            "note.remove" => {
+                let notes = cx.store.all(Some(EntryKind::Note));
+                match crate::by_title(&notes, args.text("text")?) {
+                    Ok(note) => {
+                        let note = note.clone();
+                        cx.store.delete(&note.id);
+                        Reply::done(cx.msg("removed", &[("title", &note.title)]))
+                    }
+                    Err(crate::Miss::None) => Reply::failed(cx.msg("not_found", &[])),
+                    Err(crate::Miss::Several) => Reply::failed(cx.lang.messages.get("action_unclear", &[])),
+                }
+            }
+            _ => return None,
+        })
+    }
+
     fn handle(&self, intent: &str, cx: &mut Cx) -> Option<Reply> {
         match intent {
             "add" => {
@@ -35,19 +56,21 @@ impl Skill for Notes {
                 let all: Vec<usize> = (0..cx.utt.len()).collect();
                 Some(save(cx, join(cx.utt, &all)))
             }
-            "read" => {
-                let items = cx.store.all(Some(EntryKind::Note));
-                if items.is_empty() {
-                    return Some(Reply::done(cx.msg("none", &[])));
-                }
-                let titles = items.iter().map(|e| e.title.clone()).collect::<Vec<_>>().join(", ");
-                Some(Reply::done(cx.messages.plural("read", items.len() as i64, &[("items", &titles)])).with_card(Card::Entries { title: cx.msg("card_title", &[]), items }))
-            }
+            "read" => Some(read(cx)),
             "remove" | "remove.which" => Some(remove(cx, intent == "remove.which")),
             "clear.confirm" => Some(clear_confirmed(cx)),
             _ => None,
         }
     }
+}
+
+fn read(cx: &mut Cx) -> Reply {
+    let items = cx.store.all(Some(EntryKind::Note));
+    if items.is_empty() {
+        return Reply::done(cx.msg("none", &[]));
+    }
+    let titles = items.iter().map(|e| e.title.clone()).collect::<Vec<_>>().join(", ");
+    Reply::done(cx.messages.plural("read", items.len() as i64, &[("items", &titles)])).with_card(Card::Entries { title: cx.msg("card_title", &[]), items })
 }
 
 fn remove(cx: &mut Cx, answering: bool) -> Reply {
